@@ -1,0 +1,50 @@
+[project]
+name = "retina-dr"
+version = "0.1.0"
+description = "Merge public fundus datasets into one preprocessed image set and manifest for diabetic retinopathy models."
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.0",
+    "pillow>=11.0",
+    "polars>=1.0",
+    "kaggle>=1.6",
+]
+
+[project.scripts]
+retina-dr = "retina_dr.cli:main"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "ruff>=0.8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/retina_dr"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "ANN", "PTH", "C4", "PERF"]
+
+[tool.mypy]
+strict = true
+warn_unreachable = true
+disallow_any_explicit = true
+mypy_path = "src"
+files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["kaggle", "kaggle.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "-q --strict-markers"
+testpaths = ["tests"]
