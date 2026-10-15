@@ -51,3 +51,10 @@ Decisions are in `docs/decisions.md`. Current status is in `docs/progress.md`.
 - Fixed `crop_fundus` anyway (D-022). The fix applies at the next build.
 - First scan measured only the four corners and found 0 images. The padding puts black in the corners, so the scan now measures the whole area outside the circle.
 - Cost: about $0.01 (CPU pods).
+
+## 2026-10-15 (evening): Backbone comparison started
+
+- Added `scripts/experiments.txt` and a sweep loop in `pod_job.sh`. Each run gets a smoke run first. A failed run does not stop the others.
+- Each backbone now uses the input normalization of its pretrained weights.
+- Runs (10 epochs each): EfficientNet-B3, EfficientNet-B5 Noisy Student, ConvNeXt-Small 22k (D-023).
+- Pod `csdzc0mp7r3ejv` (RTX 4090, 16 vCPU, $0.89/hr) started 22:24 UTC. The old training pod could not start: its host GPU was taken.
