@@ -34,6 +34,10 @@ if [[ -f "$OUT/manifest.parquet" ]]; then
 else
     log "downloading to $RAW"
     uv run retina-dr download --raw-dir "$RAW"
+    log "raw layout (folder, file count):"
+    find "$RAW" -mindepth 1 -maxdepth 3 -type d | sort | while read -r dir; do
+        echo "  $dir $(find "$dir" -maxdepth 1 -type f | wc -l)"
+    done
     log "building to $OUT"
     uv run retina-dr build --raw-dir "$RAW" --out-dir "$OUT"
 fi

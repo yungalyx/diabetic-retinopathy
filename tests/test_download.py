@@ -8,6 +8,7 @@ from retina_dr.download import (
     check_free_space,
     extract_archives,
     find_archives,
+    is_extracted,
 )
 
 
@@ -49,3 +50,12 @@ def test_free_space_check_raises_when_disk_is_too_small(tmp_path: Path) -> None:
 
 def test_free_space_check_passes_with_enough_disk(tmp_path: Path) -> None:
     check_free_space(tmp_path, ("aptos", "odir"), free_bytes=500 * 2**30)
+
+
+def test_source_with_extracted_images_and_no_archives_counts_as_done(tmp_path: Path) -> None:
+    assert not is_extracted(tmp_path / "missing")
+    (tmp_path / "a.zip").write_bytes(b"x")
+    (tmp_path / "img.jpeg").write_bytes(b"x")
+    assert not is_extracted(tmp_path)
+    (tmp_path / "a.zip").unlink()
+    assert is_extracted(tmp_path)

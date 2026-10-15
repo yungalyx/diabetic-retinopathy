@@ -20,20 +20,37 @@ IMAGE_EXTENSIONS: Final = frozenset({".jpg", ".jpeg", ".png", ".tif", ".tiff"})
 
 Reader = Callable[[Path], list[Record]]
 
+_DDR_EXCLUDE: Final = frozenset({"lesion_segmentation", "lesion_detection"})
+"""DDR lesion folders reuse grading image names; only DR_grading images carry grades."""
+
 
 class MissingColumnsError(ValueError):
     """A label file does not have the columns its reader needs."""
 
 
-def index_images(root: Path) -> dict[str, Path]:
-    """Map image file stem to path for every image under root."""
-    index: dict[str, Path] = {}
-    for path in root.rglob("*"):
+def index_images(root: Path, exclude_dirs: frozenset[str] = frozenset()) -> dict[str, Path]:
+    """Map image file stem to path for every image under root.
+
+    Folders named in exclude_dirs are skipped (sample sets, resized copies).
+    When one stem has several files of equal size, the first path in sort order is kept.
+    When the files differ, the stem is dropped, because the label cannot be matched safely.
+    """
+    found: dict[str, list[Path]] = {}
+    for path in sorted(root.rglob("*")):
         if path.suffix.lower() not in IMAGE_EXTENSIONS or not path.is_file():
             continue
-        if path.stem in index:
-            raise ValueError(f"duplicate image name {path.stem}: {index[path.stem]} and {path}")
-        index[path.stem] = path
+        if exclude_dirs.intersection(path.relative_to(root).parts[:-1]):
+            continue
+        found.setdefault(path.stem, []).append(path)
+    index: dict[str, Path] = {}
+    conflicts = 0
+    for stem, paths in found.items():
+        if len({p.stat().st_size for p in paths}) == 1:
+            index[stem] = paths[0]
+        else:
+            conflicts += 1
+    if conflicts:
+        log.warning("%s: dropped %d image names that point to different files", root, conflicts)
     return index
 
 
@@ -98,7 +115,7 @@ def read_eyepacs(root: Path) -> list[Record]:
         (str(image), str(image).split("_")[0], int(level), int(level))
         for image, level in labels.select("image", "level").iter_rows()
     )
-    return _build("eyepacs", rows, index_images(root))
+    return _build("eyepacs", rows, index_images(root, frozenset({"sample"})))
 
 
 def read_aptos(root: Path) -> list[Record]:
@@ -124,7 +141,7 @@ def read_ddr(root: Path) -> list[Record]:
             rows.append((stem, stem, grade, grade if grade <= MAX_GRADE else None))
     if not rows:
         raise FileNotFoundError(f"no DDR grading .txt files found under {root}")
-    return _build("ddr", rows, index_images(root))
+    return _build("ddr", rows, index_images(root, _DDR_EXCLUDE))
 
 
 def read_odir(root: Path) -> list[Record]:
@@ -142,7 +159,7 @@ def read_odir(root: Path) -> list[Record]:
         for fundus, keywords in ((left, left_kw), (right, right_kw)):
             grade = odir_eye_grade(str(keywords or ""))
             rows.append((Path(str(fundus)).stem, str(pid), grade, None))
-    return _build("odir", rows, index_images(root))
+    return _build("odir", rows, index_images(root, frozenset({"preprocessed_images"})))
 
 
 SOURCE_READERS: Final[dict[Source, Reader]] = {

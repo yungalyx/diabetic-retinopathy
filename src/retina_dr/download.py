@@ -9,6 +9,7 @@ from typing import Final
 
 from retina_dr.kaggle_adapter import KaggleRef, download
 from retina_dr.records import Source
+from retina_dr.sources import IMAGE_EXTENSIONS
 
 log = logging.getLogger(__name__)
 
@@ -103,10 +104,25 @@ def extract_archives(root: Path, delete: bool) -> None:
     log.warning("archives still nested after %d passes under %s", _MAX_PASSES, root)
 
 
+def is_extracted(dest: Path) -> bool:
+    """Return True when dest holds images and no archives, so a rerun can skip it."""
+    if not dest.is_dir():
+        return False
+    plain, multipart = find_archives(dest)
+    if plain or multipart:
+        return False
+    return any(p.suffix.lower() in IMAGE_EXTENSIONS for p in dest.rglob("*"))
+
+
 def download_sources(raw_dir: Path, sources: tuple[Source, ...], delete_archives: bool) -> None:
     """Download and extract each source into raw_dir/<source>."""
-    check_free_space(raw_dir, sources, delete_archives=delete_archives)
-    for source in sources:
+    pending = tuple(s for s in sources if not is_extracted(raw_dir / s))
+    for source in sorted(set(sources) - set(pending)):
+        log.info("%s: already extracted in %s, skipping download", source, raw_dir / source)
+    if not pending:
+        return
+    check_free_space(raw_dir, pending, delete_archives=delete_archives)
+    for source in pending:
         dest = raw_dir / source
         log.info("downloading %s into %s", source, dest)
         download(KAGGLE_SOURCES[source], dest)

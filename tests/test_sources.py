@@ -1,9 +1,11 @@
+import shutil
 from pathlib import Path
 
 import pytest
 
 from retina_dr.records import Record
-from retina_dr.sources import SOURCE_READERS, MissingColumnsError, read_source
+from retina_dr.sources import SOURCE_READERS, MissingColumnsError, index_images, read_source
+from tests.conftest import MakeImage, write_fundus
 
 
 def _by_id(records: list[Record]) -> dict[str, Record]:
@@ -48,3 +50,31 @@ def test_missing_label_column_fails_with_a_clear_error(raw_dir: Path) -> None:
     (raw_dir / "aptos" / "train.csv").write_text("id_code,label\nabc123,2\n")
     with pytest.raises(MissingColumnsError, match="diagnosis"):
         read_source("aptos", raw_dir / "aptos")
+
+
+def test_eyepacs_ignores_the_sample_folder(raw_dir: Path) -> None:
+    sample = raw_dir / "eyepacs" / "sample"
+    sample.mkdir()
+    shutil.copy(raw_dir / "eyepacs" / "train" / "10_left.jpeg", sample / "10_left.jpeg")
+    records = _by_id(read_source("eyepacs", raw_dir / "eyepacs"))
+    assert records["10_left"].raw_path.parent.name == "train"
+
+
+def test_odir_ignores_the_preprocessed_copies(raw_dir: Path, make_image: MakeImage) -> None:
+    make_image(raw_dir / "odir" / "preprocessed_images" / "1_left.jpg", 99)
+    records = _by_id(read_source("odir", raw_dir / "odir"))
+    assert records["1_left"].raw_path.parent.name == "Training Images"
+
+
+def test_identical_duplicates_keep_one_copy(tmp_path: Path, make_image: MakeImage) -> None:
+    first = make_image(tmp_path / "a" / "x.png", 1)
+    (tmp_path / "b").mkdir()
+    shutil.copy(first, tmp_path / "b" / "x.png")
+    assert index_images(tmp_path) == {"x": tmp_path / "a" / "x.png"}
+
+
+def test_different_files_with_one_name_are_dropped(tmp_path: Path, make_image: MakeImage) -> None:
+    make_image(tmp_path / "a" / "x.png", 1)
+    write_fundus(tmp_path / "b" / "x.png", 2, size=(80, 60))
+    make_image(tmp_path / "a" / "y.png", 3)
+    assert set(index_images(tmp_path)) == {"y"}
