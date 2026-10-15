@@ -14,6 +14,16 @@ Last update: 2026-10-14
 | 6. Training script (EfficientNet-B3, two heads) | Not started |
 | 7. RETFound experiment | Not started |
 
+## RunPod resources
+
+| Resource | ID | Details | Cost |
+|---|---|---|---|
+| Pod `retina-dr-4090` | `00difbrelhsfon` | RTX 4090, Secure Cloud, EU-RO-1, template `runpod-torch-v280`, 250 GB container disk | $0.89/hr while running |
+| Network volume `retina-dr-data` | `5ac8gl5sy9` | 50 GB STANDARD, EU-RO-1, mounted at `/workspace` | About $3.50/month until deleted |
+| Secret `kaggle_api_token` | `s7u36506fd` | Pod reads it as `KAGGLE_API_TOKEN` | Free |
+
+The pod log is also written to `/workspace/bootstrap.log`.
+
 ## Next actions
 
 1. Agent: watch the pod log until `/workspace/status/DONE` or `FAILED` exists.
