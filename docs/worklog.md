@@ -42,3 +42,12 @@ Decisions are in `docs/decisions.md`. Current status is in `docs/progress.md`.
 - Looked at 64 of them (`scripts/analysis/ddr_grade4_failures.py`). Groups: retina hidden by haze (about 20), large hemorrhage (about 12), laser scars or fibrous tissue (about 10), normal-looking at 128 px (about 19), white-corner crop failure (2).
 - Conclusion: the model has no "cannot grade" output, and advanced disease is rare in training.
 - Cost: about $0.01 (CPU pod).
+
+## 2026-10-15 (afternoon): White-corner crop bug
+
+- Measured near-white pixels outside the fundus circle in all 57,952 processed images (`scripts/analysis/white_corners.py`).
+- Result: 25 images (0.04%) have a white background. ODIR train 12, ODIR test 3, DDR 10. None in EyePACS or APTOS.
+- Effect on accuracy: none that we can measure. DDR sensitivity is 0.788 with and without these 10 images. 8 of the 10 DDR images were still referred. The 3 ODIR test images were correct negatives.
+- Fixed `crop_fundus` anyway (D-022). The fix applies at the next build.
+- First scan measured only the four corners and found 0 images. The padding puts black in the corners, so the scan now measures the whole area outside the circle.
+- Cost: about $0.01 (CPU pods).

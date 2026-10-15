@@ -31,7 +31,7 @@ The pod log is also written to `/workspace/bootstrap.log`.
 Work continues with research-only data and weights (D-020).
 
 1. Alex: decide if this repo stays public. The study protocol is in `docs/private/` and is not committed.
-2. Agent: fix `crop_fundus` for white backgrounds. Add a test with a white-corner image.
+2. Agent: write the failure analysis report for the researcher in `docs/reports/`, with example images per group.
 3. Agent: add an image quality output (D-018). Train it on DDR grade 5 and DeepDRiD quality labels.
 4. Agent: add IDRiD and Messidor-2 as the external test (D-016), and provenance records (D-019).
 5. Agent: RETFound experiment (step 7) with a 10-epoch schedule.
@@ -117,7 +117,7 @@ A visual check of 64 random thumbnails (128 px, by the agent, not a clinician) g
 | Retina looks normal or mild at 128 px | about 19 | Needs full-resolution review. Possible small new vessels or label errors |
 | Laser scars or dense exudates | about 5 | Many round pale spots |
 | Fibrous tissue or traction | about 5 | Pale membranes along vessels |
-| Crop failure: white corners | 2 | `crop_fundus` did not remove a white background |
+| Crop failure: white corners | 2 | `crop_fundus` did not remove a white background. Fixed in D-022. Only 25 of 57,952 images are affected |
 
 Image statistics (mean over up to 150 images per group): the failures are darker (5.8% dark pixels, against 1.3% for correct grade 0) and less sharp than grade 0.
 The correctly graded grade 4 images are also blurred, so image quality alone does not explain the failure.
