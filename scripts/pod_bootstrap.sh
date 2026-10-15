@@ -13,6 +13,10 @@ OUT="$WORK/processed"
 STATUS="$WORK/status"
 POLL_SECONDS=60
 
+export UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-/root/venv}"
+export UV_CACHE_DIR="${UV_CACHE_DIR:-/workspace/.uv-cache}"
+export UV_LINK_MODE=copy
+
 log() { echo "[bootstrap $(date -u +%H:%M:%S)] $*"; }
 
 show_raw() {
