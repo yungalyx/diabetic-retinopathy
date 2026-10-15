@@ -69,3 +69,14 @@ Supersedes the threshold in D-011 (RMS 4).
 Reason: the nearest-neighbour distance distribution on the real data was 0-1: 516, 1-2: 28, 2-4: 684, 4-8: 23,643 images.
 Copies sit below 1. The gap is at 1-2. Images at 2-4 are the near edge of the distinct-image distribution.
 At RMS 4 the build dropped 877 images, with 111 groups of conflicting labels, which shows false matches.
+
+## D-013 Baseline training setup (2026-10-15)
+
+Model: EfficientNet-B3 (timm, ImageNet weights) with a binary head and a severity head on pooled features, dropout 0.3.
+Input: 512 px. Batch 24. bfloat16 autocast on the GPU.
+Optimizer: AdamW, learning rate 3e-4, weight decay 1e-5. Linear warmup for 5% of steps, then cosine decay.
+Epochs: 15. Sampling: weights proportional to stratum frequency ** -alpha, alpha decays from 0.5 to 0.
+Loss: binary cross-entropy plus Huber (delta 1) on rows with a clinician grade, weight 1.
+Checkpoint choice: the epoch with the best mean of val AUC and val QWK (cutpoints tuned on val).
+Final evaluation: 8x dihedral test-time augmentation. Cutpoints tuned on val only, then applied to test and holdout.
+Reason: these follow D-002, D-009, and D-010. The values are common defaults for this model size, not tuned.

@@ -30,11 +30,19 @@ show_raw() {
 run_pipeline() {
     bash scripts/runpod_setup.sh || return 1
     export PATH="$HOME/.local/bin:$PATH"
-    log "downloading to $RAW"
-    uv run retina-dr download --raw-dir "$RAW" || return 1
-    show_raw
-    log "building to $OUT"
-    uv run retina-dr build --raw-dir "$RAW" --out-dir "$OUT" || return 1
+    if [[ ! -f "$OUT/manifest.parquet" || -n "${REBUILD:-}" ]]; then
+        log "downloading to $RAW"
+        uv run retina-dr download --raw-dir "$RAW" || return 1
+        show_raw
+        log "building to $OUT"
+        uv run retina-dr build --raw-dir "$RAW" --out-dir "$OUT" || return 1
+    else
+        log "manifest exists at $OUT, skipping download and build (set REBUILD=1 to force)"
+    fi
+    if [[ -f scripts/pod_job.sh ]]; then
+        log "running scripts/pod_job.sh"
+        bash scripts/pod_job.sh || return 1
+    fi
 }
 
 mkdir -p "$STATUS"

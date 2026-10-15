@@ -11,7 +11,7 @@ Last update: 2026-10-14
 | 3. Research Kaggle post-mortems | Done (docs/research/kaggle-postmortems.md) |
 | 4. RunPod access for the agent | Done. Code is on GitHub (yungalyx/diabetic-retinopathy) |
 | 5. Run download and build on a pod | Done 2026-10-15 07:15 UTC at commit 2ca78e1. 57,633 images in the manifest |
-| 6. Training script (EfficientNet-B3, two heads) | Not started |
+| 6. Training script (EfficientNet-B3, two heads) | Done (D-013). 92 tests, CPU end-to-end test passes |
 | 7. RETFound experiment | Not started |
 
 ## RunPod resources
@@ -26,8 +26,8 @@ The pod log is also written to `/workspace/bootstrap.log`.
 
 ## Next actions
 
-1. Agent: write the training script (EfficientNet-B3, two heads, D-002, D-009, D-010).
-2. Agent: start the pod with the training command. The processed set is on the network volume at `/workspace/processed`.
+1. Agent: start the pod. The boot script skips the build and runs `scripts/pod_job.sh`: a smoke run, then the full run.
+2. Agent: read `/workspace/runs/<run>/metrics.json` from the log. Report val, test, and DDR holdout results.
 
 ## Verified source facts (pod log, 2026-10-15)
 

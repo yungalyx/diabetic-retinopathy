@@ -47,12 +47,60 @@ def _parser() -> argparse.ArgumentParser:
     bd.add_argument("--holdout", default="ddr", help="source to hold out, or 'none'")
     bd.add_argument("--seed", type=int, default=0)
     bd.add_argument("--workers", type=int, default=os.cpu_count() or 4)
+
+    tr = commands.add_parser("train", help="train the two-head model and evaluate it")
+    tr.add_argument("--data-dir", type=Path, default=Path("data/processed"))
+    tr.add_argument("--run-dir", type=Path, required=True)
+    tr.add_argument("--model", default="efficientnet_b3")
+    tr.add_argument("--no-pretrained", action="store_true")
+    tr.add_argument("--image-size", type=int, default=512)
+    tr.add_argument("--epochs", type=int, default=15)
+    tr.add_argument("--batch-size", type=int, default=24)
+    tr.add_argument("--lr", type=float, default=3e-4)
+    tr.add_argument("--weight-decay", type=float, default=1e-5)
+    tr.add_argument("--severity-weight", type=float, default=1.0)
+    tr.add_argument("--rebalance-start", type=float, default=0.5)
+    tr.add_argument("--workers", type=int, default=os.cpu_count() or 4)
+    tr.add_argument("--seed", type=int, default=0)
+    tr.add_argument("--limit", type=int, default=None, help="rows per split, for smoke runs")
+    tr.add_argument("--no-tta", action="store_true")
+    tr.add_argument("--log-every", type=int, default=200)
+    tr.add_argument("--device", default="auto")
     return parser
+
+
+def _train(args: argparse.Namespace) -> int:
+    # Imported here so the data commands do not load PyTorch.
+    from retina_dr.train.engine import TrainConfig, train
+
+    config = TrainConfig(
+        data_dir=Path(args.data_dir),
+        run_dir=Path(args.run_dir),
+        model=str(args.model),
+        pretrained=not args.no_pretrained,
+        image_size=int(args.image_size),
+        epochs=int(args.epochs),
+        batch_size=int(args.batch_size),
+        lr=float(args.lr),
+        weight_decay=float(args.weight_decay),
+        severity_weight=float(args.severity_weight),
+        rebalance_start=float(args.rebalance_start),
+        workers=int(args.workers),
+        seed=int(args.seed),
+        limit=None if args.limit is None else int(args.limit),
+        tta=not args.no_tta,
+        log_every=int(args.log_every),
+        device=str(args.device),
+    )
+    print(f"run written to {train(config)}")
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     args = _parser().parse_args(argv)
+    if args.command == "train":
+        return _train(args)
     sources = parse_sources(str(args.sources))
 
     if args.command == "download":

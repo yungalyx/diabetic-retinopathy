@@ -86,3 +86,12 @@ When a label file has different columns, the build stops with an error that name
 
 Run `make check`. This command runs ruff, mypy (strict), and pytest.
 Run `make fmt` to fix formatting.
+
+## Train
+
+Run `uv run retina-dr train --data-dir data/processed --run-dir runs/<name>`.
+The run folder gets `config.json`, `history.jsonl` (one line per epoch), `best.pt`, `predictions.parquet`, and `metrics.json`.
+Use `--limit 600 --epochs 1` for a smoke run. See D-013 in `docs/decisions.md` for the default settings.
+
+On the pod, `scripts/pod_job.sh` runs after the build. It copies the processed set to local disk and runs a smoke run and the full run.
+It stops the pod when the full run finishes.
