@@ -31,7 +31,7 @@ The pod log is also written to `/workspace/bootstrap.log`.
 Work continues with research-only data and weights (D-020).
 
 1. Alex: decide if this repo stays public. The study protocol is in `docs/private/` and is not committed.
-2. Agent: run `retina-dr evaluate` on the baseline run (D-017, D-021). The code is done.
+2. Agent: inspect a sample of the 121 DDR grade 4 images predicted as grade 0.
 3. Agent: add IDRiD and Messidor-2 as the external test (D-016), and provenance records (D-019).
 4. Agent: RETFound experiment (step 7) with a 10-epoch schedule.
 
@@ -76,12 +76,40 @@ Generalisation gap (test to DDR holdout): AUC -0.025, QWK tuned -0.074.
 Val curve: AUC 0.928 (epoch 0), 0.950 (2), 0.954 (5), 0.958 (8), 0.958 (9), 0.954 (14). Train loss fell from 0.73 to 0.10, so epochs 10-14 overfit.
 Speed: about 185 images/s, 3.5 minutes per epoch, GPU at 97%.
 
+### Operating point and intervals (D-017, D-021, `metrics_ci.json`)
+
+Threshold: probability 0.0317, set at 85% specificity on val. 95% intervals: 500 patient-level bootstrap resamples.
+
+| Split | Sensitivity | Specificity | QWK tuned | VTDR sensitivity | Severe undergrading (grade 3-4 as 0-1) |
+|---|---|---|---|---|---|
+| test, all | 0.888 (0.865-0.906) | 0.853 (0.840-0.865) | 0.838 (0.818-0.854) | 0.967 | 15 of 215 (7.0%) |
+| test, EyePACS | 0.880 (0.856-0.904) | 0.844 (0.830-0.860) | 0.815 (0.794-0.835) | 0.963 | 14 of 160 (8.8%) |
+| test, APTOS | 0.972 (0.943-1.000) | 0.902 (0.860-0.938) | 0.917 (0.892-0.940) | 0.982 | 1 of 55 (1.8%) |
+| test, ODIR | 0.845 (0.780-0.899) | 0.880 (0.853-0.907) | n/a | n/a | n/a |
+| DDR holdout | 0.788 (0.778-0.798) | 0.948 (0.943-0.954) | 0.764 (0.753-0.775) | 0.801 | 193 of 1,146 (16.8%) |
+
+The val threshold gives 95% specificity on DDR, not 85%. The model gives lower scores on DDR images. Sensitivity falls to 0.79.
+
+DDR confusion matrix (rows: true grade, columns: predicted grade 0-4):
+
+| True | 0 | 1 | 2 | 3 | 4 |
+|---|---|---|---|---|---|
+| 0 | 6,036 | 91 | 9 | 2 | 3 |
+| 1 | 290 | 241 | 83 | 2 | 11 |
+| 2 | 835 | 777 | 1,633 | 1,024 | 205 |
+| 3 | 4 | 6 | 22 | 164 | 40 |
+| 4 | 121 | 62 | 77 | 153 | 497 |
+
+Findings:
+1. Grade 2 spreads over predicted grades 0-4. 36% of DDR grade 2 is predicted as 0 or 1. This agrees with a different grade 2 boundary between DDR and EyePACS graders.
+2. 121 of 910 DDR grade 4 images are predicted as grade 0. Grade 3 has only 4. This is a specific failure. Possible causes: laser scars after treatment, vitreous hemorrhage, or label errors. Inspect these images.
+
 ## Open questions
 
 - For the researcher: research-only data and weights (DDR, RETFound, Kaggle competition data) are used now. Decide how to handle them for a commercial model (D-020).
 - ODIR-5K licence: find the original release and its terms.
 
-- Does the severity gap on DDR come from the model or from grader differences between sources? Check the DDR confusion matrix in predictions.parquet.
+- Why are 121 DDR grade 4 images predicted as grade 0? Inspect a sample.
 
 ## Later improvements
 
