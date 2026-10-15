@@ -20,6 +20,8 @@ This repo is the public-data DR component of a larger research study. Study cont
 | File | Content | Update rule |
 |---|---|---|
 | `docs/progress.md` | Current status, next actions, open questions | Update at the end of each work session |
+| `docs/worklog.md` | Dated log of what was done, the result, and the cost | Append an entry at the end of each work block |
+| `docs/reports/` | Reports for the researcher, with figures | Add one file per report |
 | `docs/decisions.md` | Numbered decision log with the reason for each decision | Append a new entry. Do not edit old entries. Supersede them with a new entry |
 | `docs/research/` | Research notes with sources | Add one file per research topic |
 | `README.md` | How to run the pipeline | Update when commands or behavior change |

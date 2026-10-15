@@ -3,8 +3,9 @@
 Run on a pod with the network volume at /workspace and PYTHONPATH=src:
     python scripts/analysis/white_corners.py TAR RUN_DIR
 
-Reads every JPEG in the processed tar, measures the mean brightness of four 16x16 corner
-patches, and flags an image when any corner is above 200 (0-255 scale).
+Reads every JPEG in the processed tar and measures the share of near-white pixels
+(gray above 215) outside the inscribed circle. A correct crop has a black background there.
+Flags an image when that share is above 5%. Prints the distribution to check the cut-off.
 Prints counts per source and split, metrics for flagged and other images, and a contact sheet.
 """
 
@@ -21,17 +22,18 @@ from PIL import Image
 
 from retina_dr.train.metrics import quadratic_weighted_kappa, rates_at_threshold, roc_auc
 
-PATCH = 16
-WHITE = 200
+NEAR_WHITE = 215
+WHITE = 0.05
 CHUNK = 8000
 
 
 def corner_max(data: bytes) -> float:
+    """Share of near-white pixels outside the inscribed circle."""
     with Image.open(io.BytesIO(data)) as raw:
-        gray = np.asarray(raw.convert("L"), dtype=np.float64)
-    p = PATCH
-    corners = [gray[:p, :p], gray[:p, -p:], gray[-p:, :p], gray[-p:, -p:]]
-    return float(max(c.mean() for c in corners))
+        gray = np.asarray(raw.convert("L").resize((128, 128)), dtype=np.float64)
+    yy, xx = np.mgrid[:128, :128]
+    outside = (yy - 63.5) ** 2 + (xx - 63.5) ** 2 > 64.0**2
+    return float((gray[outside] > NEAR_WHITE).mean())
 
 
 def scan(tar_path: Path) -> pl.DataFrame:
@@ -100,6 +102,9 @@ def main(tar_path: Path, run_dir: Path) -> None:
     corners.write_parquet(run_dir / "corner_scan.parquet")
     flagged = corners.with_columns((pl.col("corner_max") > WHITE).alias("white"))
     print("WHITE_TOTAL", int(flagged["white"].sum()), "of", flagged.height, flush=True)
+    for low, high in [(0, 0.001), (0.001, 0.01), (0.01, 0.05), (0.05, 0.2), (0.2, 1.01)]:
+        band = flagged.filter((pl.col("corner_max") >= low) & (pl.col("corner_max") < high))
+        print("BAND", low, high, band.height, flush=True)
 
     threshold = float(json.loads((run_dir / "metrics_ci.json").read_text())["threshold"])
     predictions = pl.read_parquet(run_dir / "predictions.parquet").join(
