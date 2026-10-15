@@ -147,3 +147,10 @@ Reason: 85% leaves a margin above the 80% specificity target. Images of one pati
 After the crop, white pixels outside the inscribed ellipse become black.
 Reason: some source images have a white background. The old crop kept it, so the fundus was smaller and the corners were white.
 The fix takes effect at the next build. The current processed set still has the old crops.
+
+## D-023 Backbone comparison with a 10-epoch schedule (2026-10-15)
+
+Train three backbones on the same manifest and splits, 10 epochs each: EfficientNet-B3, EfficientNet-B5 (Noisy Student, JFT), and ConvNeXt-Small (ImageNet-22k).
+List the runs in `scripts/experiments.txt`. Compare them on the DDR holdout.
+Use the input normalization from the pretrained config of each backbone.
+Reason: the baseline peaked at epoch 9. The B5 and ConvNeXt weights are Apache 2.0, unlike the RETFound weights (CC BY-NC 4.0). RETFound needs gated access on HuggingFace.

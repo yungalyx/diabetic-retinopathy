@@ -184,3 +184,21 @@ def test_available_cpus_reads_the_cgroup_quota(
     if cpu_max is not None:
         path.write_text(cpu_max)
     assert available_cpus(path, fallback=6) == expected
+
+
+def test_backbone_normalization_follows_the_pretrained_weights() -> None:
+    from retina_dr.train.backbone import create_backbone, normalization_of
+    from retina_dr.train.data import IMAGENET_MEAN
+
+    tiny, _ = create_backbone(TINY_MODEL, pretrained=False)
+    assert normalization_of(tiny)[0] == IMAGENET_MEAN
+    vit, _ = create_backbone("vit_tiny_patch16_224.augreg_in21k", pretrained=False)
+    assert normalization_of(vit) == ((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+
+
+def test_eval_transform_uses_the_given_normalization() -> None:
+    from PIL import Image
+
+    image = Image.new("RGB", (8, 8), (255, 255, 255))
+    out = eval_transform(8, ((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)))(image)
+    assert torch.allclose(out, torch.ones_like(out))

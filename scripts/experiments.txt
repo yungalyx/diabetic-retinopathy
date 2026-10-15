@@ -1,0 +1,6 @@
+# One training run per line: <name> <retina-dr train arguments>.
+# pod_job.sh runs each line in order and skips a run that has metrics.json.
+# Compare runs on the DDR holdout (D-016). See D-023.
+b3-e10 --model efficientnet_b3 --epochs 10
+b5ns-e10 --model tf_efficientnet_b5.ns_jft_in1k --epochs 10 --batch-size 12 --lr 2e-4
+convnexts-e10 --model convnext_small.fb_in22k_ft_in1k_384 --epochs 10 --batch-size 16 --lr 1e-4

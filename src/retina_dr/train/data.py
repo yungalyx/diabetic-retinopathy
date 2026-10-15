@@ -14,10 +14,12 @@ from torch import Tensor
 from torch.utils.data import Dataset
 from torchvision.transforms import v2
 
+from retina_dr.train.backbone import Normalization
 from retina_dr.train.sampling import NO_GRADE
 
 IMAGENET_MEAN: Final = (0.485, 0.456, 0.406)
 IMAGENET_STD: Final = (0.229, 0.224, 0.225)
+IMAGENET: Final[Normalization] = (IMAGENET_MEAN, IMAGENET_STD)
 
 Transform = Callable[[Image.Image], Tensor]
 """Takes a PIL image, returns a normalised float tensor. PIL ops run in C and are fast."""
@@ -38,7 +40,7 @@ def labels_of(frame: pl.DataFrame) -> Labels:
     return Labels(binary.astype(np.int64), grade.astype(np.int64))
 
 
-def train_transform(size: int) -> Transform:
+def train_transform(size: int, norm: Normalization = IMAGENET) -> Transform:
     transform: Transform = v2.Compose(
         [
             v2.RandomResizedCrop(size, scale=(0.85, 1.0), ratio=(0.95, 1.05), antialias=True),
@@ -48,19 +50,19 @@ def train_transform(size: int) -> Transform:
             v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.1),
             v2.PILToTensor(),
             v2.ToDtype(torch.float32, scale=True),
-            v2.Normalize(IMAGENET_MEAN, IMAGENET_STD),
+            v2.Normalize(norm[0], norm[1]),
         ]
     )
     return transform
 
 
-def eval_transform(size: int) -> Transform:
+def eval_transform(size: int, norm: Normalization = IMAGENET) -> Transform:
     transform: Transform = v2.Compose(
         [
             v2.Resize((size, size), antialias=True),
             v2.PILToTensor(),
             v2.ToDtype(torch.float32, scale=True),
-            v2.Normalize(IMAGENET_MEAN, IMAGENET_STD),
+            v2.Normalize(norm[0], norm[1]),
         ]
     )
     return transform

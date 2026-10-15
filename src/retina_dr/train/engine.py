@@ -19,6 +19,7 @@ from numpy.typing import NDArray
 from torch import Tensor
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
+from retina_dr.train.backbone import normalization_of
 from retina_dr.train.data import FundusDataset, eval_transform, labels_of, train_transform
 from retina_dr.train.losses import two_head_loss
 from retina_dr.train.metrics import (
@@ -209,7 +210,10 @@ def train(config: TrainConfig) -> Path:
     log.info("device %s, rows per split %s", device, {k: v.height for k, v in splits.items()})
 
     root = config.data_dir
-    train_set = FundusDataset(splits[TRAIN_SPLIT], root, train_transform(config.image_size))
+    model = build_model(config.model, config.pretrained).to(device)
+    norm = normalization_of(model.backbone)
+    log.info("model %s, input normalization mean %s std %s", config.model, norm[0], norm[1])
+    train_set = FundusDataset(splits[TRAIN_SPLIT], root, train_transform(config.image_size, norm))
     labels = labels_of(splits[TRAIN_SPLIT])
     strata = strata_from_labels(labels.grade, labels.binary)
     sampler = WeightedRandomSampler(
@@ -221,12 +225,13 @@ def train(config: TrainConfig) -> Path:
     train_loader = _loader(train_set, config, device, sampler)
     eval_loaders = {
         split: _loader(
-            FundusDataset(splits[split], root, eval_transform(config.image_size)), config, device
+            FundusDataset(splits[split], root, eval_transform(config.image_size, norm)),
+            config,
+            device,
         )
         for split in EVAL_SPLITS
     }
 
-    model = build_model(config.model, config.pretrained).to(device)
     if device.type == "cuda":
         torch.backends.cudnn.benchmark = True
         model = model.to(memory_format=torch.channels_last)
