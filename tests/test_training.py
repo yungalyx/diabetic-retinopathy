@@ -132,3 +132,28 @@ def test_training_writes_checkpoint_history_predictions_and_metrics(tmp_path: Pa
     metrics = json.loads((run / "metrics.json").read_text())
     assert len(metrics["cutpoints"]) == 4
     assert any(r["split"] == "holdout" for r in metrics["rows"])
+
+
+def test_transforms_take_a_pil_image_and_return_a_normalised_tensor() -> None:
+    from PIL import Image
+
+    image = Image.new("RGB", (64, 64), (120, 60, 30))
+    for transform in (train_transform(32), eval_transform(32)):
+        out = transform(image)
+        assert out.shape == (3, 32, 32)
+        assert out.dtype == torch.float32
+
+
+@pytest.mark.parametrize(
+    ("cpu_max", "expected"),
+    [("800000 100000\n", 8), ("150000 100000\n", 2), ("max 100000\n", 6), (None, 6)],
+)
+def test_available_cpus_reads_the_cgroup_quota(
+    tmp_path: Path, cpu_max: str | None, expected: int
+) -> None:
+    from retina_dr.train.engine import available_cpus
+
+    path = tmp_path / "cpu.max"
+    if cpu_max is not None:
+        path.write_text(cpu_max)
+    assert available_cpus(path, fallback=6) == expected

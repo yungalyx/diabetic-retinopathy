@@ -60,7 +60,7 @@ def _parser() -> argparse.ArgumentParser:
     tr.add_argument("--weight-decay", type=float, default=1e-5)
     tr.add_argument("--severity-weight", type=float, default=1.0)
     tr.add_argument("--rebalance-start", type=float, default=0.5)
-    tr.add_argument("--workers", type=int, default=os.cpu_count() or 4)
+    tr.add_argument("--workers", type=int, default=None, help="default: available CPUs - 1")
     tr.add_argument("--seed", type=int, default=0)
     tr.add_argument("--limit", type=int, default=None, help="rows per split, for smoke runs")
     tr.add_argument("--no-tta", action="store_true")
@@ -71,7 +71,7 @@ def _parser() -> argparse.ArgumentParser:
 
 def _train(args: argparse.Namespace) -> int:
     # Imported here so the data commands do not load PyTorch.
-    from retina_dr.train.engine import TrainConfig, train
+    from retina_dr.train.engine import TrainConfig, available_cpus, train
 
     config = TrainConfig(
         data_dir=Path(args.data_dir),
@@ -85,7 +85,7 @@ def _train(args: argparse.Namespace) -> int:
         weight_decay=float(args.weight_decay),
         severity_weight=float(args.severity_weight),
         rebalance_start=float(args.rebalance_start),
-        workers=int(args.workers),
+        workers=max(1, available_cpus() - 1) if args.workers is None else int(args.workers),
         seed=int(args.seed),
         limit=None if args.limit is None else int(args.limit),
         tta=not args.no_tta,

@@ -13,14 +13,14 @@ from PIL import Image
 from torch import Tensor
 from torch.utils.data import Dataset
 from torchvision.transforms import v2
-from torchvision.transforms.v2.functional import pil_to_tensor
 
 from retina_dr.train.sampling import NO_GRADE
 
 IMAGENET_MEAN: Final = (0.485, 0.456, 0.406)
 IMAGENET_STD: Final = (0.229, 0.224, 0.225)
 
-Transform = Callable[[Tensor], Tensor]
+Transform = Callable[[Image.Image], Tensor]
+"""Takes a PIL image, returns a normalised float tensor. PIL ops run in C and are fast."""
 Batch = tuple[Tensor, Tensor, Tensor, Tensor]
 """images, binary label (float), grade (float, 0 when missing), has_grade (float 0/1)."""
 
@@ -45,7 +45,8 @@ def train_transform(size: int) -> Transform:
             v2.RandomHorizontalFlip(),
             v2.RandomVerticalFlip(),
             v2.RandomRotation(180),
-            v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.1, hue=0.02),
+            v2.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.1),
+            v2.PILToTensor(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(IMAGENET_MEAN, IMAGENET_STD),
         ]
@@ -57,6 +58,7 @@ def eval_transform(size: int) -> Transform:
     transform: Transform = v2.Compose(
         [
             v2.Resize((size, size), antialias=True),
+            v2.PILToTensor(),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(IMAGENET_MEAN, IMAGENET_STD),
         ]
@@ -80,6 +82,5 @@ class FundusDataset(Dataset[Batch]):
 
     def __getitem__(self, index: int) -> Batch:
         with Image.open(self.paths[index]) as raw:
-            image: Tensor = pil_to_tensor(raw.convert("RGB"))
-        pixels: Tensor = self.transform(image)
+            pixels = self.transform(raw.convert("RGB"))
         return pixels, self.binary[index], self.grade[index], self.has_grade[index]

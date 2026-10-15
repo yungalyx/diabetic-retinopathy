@@ -4,6 +4,7 @@ import contextlib
 import json
 import logging
 import math
+import os
 import random
 import time
 from collections.abc import Iterator
@@ -39,6 +40,29 @@ EVAL_SPLITS: Final = ("val", "test", "holdout")
 WARMUP_FRACTION: Final = 0.05
 
 FloatArray = NDArray[np.float64]
+
+
+CGROUP_CPU_MAX: Final = Path("/sys/fs/cgroup/cpu.max")
+
+
+def available_cpus(cpu_max: Path = CGROUP_CPU_MAX, fallback: int | None = None) -> int:
+    """CPUs this process may use: the cgroup v2 quota when set, else the affinity mask.
+
+    os.cpu_count() reports the host's CPUs inside a container, which oversubscribes it.
+    """
+    default = fallback if fallback is not None else len(os.sched_getaffinity(0))
+    try:
+        quota, period = cpu_max.read_text().split()[:2]
+    except (OSError, ValueError):
+        return default
+    if quota == "max":
+        return default
+    return max(1, math.ceil(int(quota) / int(period)))
+
+
+def _worker_init(_: int) -> None:
+    # Each loader worker decodes one image at a time; extra threads only add contention.
+    torch.set_num_threads(1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,6 +191,7 @@ def _loader(
         num_workers=config.workers,
         pin_memory=device.type == "cuda",
         persistent_workers=config.workers > 0,
+        worker_init_fn=_worker_init if config.workers > 0 else None,
     )
 
 

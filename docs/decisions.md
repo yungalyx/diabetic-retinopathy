@@ -80,3 +80,13 @@ Loss: binary cross-entropy plus Huber (delta 1) on rows with a clinician grade, 
 Checkpoint choice: the epoch with the best mean of val AUC and val QWK (cutpoints tuned on val).
 Final evaluation: 8x dihedral test-time augmentation. Cutpoints tuned on val only, then applied to test and holdout.
 Reason: these follow D-002, D-009, and D-010. The values are common defaults for this model size, not tuned.
+
+## D-014 Augmentation on PIL images, no hue jitter (2026-10-15)
+
+Supersedes the color part of D-010 and D-013.
+Run geometric and color augmentation on PIL images, then convert to a tensor.
+Use brightness 0.2, contrast 0.2, and saturation 0.1. Do not use hue jitter.
+Loader workers default to the cgroup CPU quota minus one, with one thread per worker.
+Reason: the first full run trained at 35 images/s with the GPU idle (CPU at 97%).
+Tensor augmentation with hue cost 51 ms per image. PIL augmentation without hue costs 14 ms.
+os.cpu_count() reported the host CPUs inside the pod, so the loader oversubscribed its 8 vCPUs.
