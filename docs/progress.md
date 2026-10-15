@@ -31,12 +31,18 @@ The pod log is also written to `/workspace/bootstrap.log`.
 3. Agent: verify the items in "Open questions" against the real files.
 4. Agent: write the training script.
 
+## Verified source facts (pod log, 2026-10-15)
+
+| Source | Label file | Columns used | Labelled images |
+|---|---|---|---|
+| EyePACS | `trainLabels.csv` | `image`, `level` | 35,126 (train only; the 53,576 test images have no labels) |
+| APTOS | `train.csv` | `id_code`, `diagnosis` | 3,662 |
+| DDR | `DR_grading.csv` (Kaggle mirror, flat image folder) | `id_code`, `diagnosis` | 12,522 |
+| ODIR | `full_df.csv` | `ID`, `Left-/Right-Fundus`, `Left-/Right-Diagnostic Keywords` | 6,642 (74 ungradable eyes dropped) |
+
 ## Open questions
 
-- DDR: the slug `mariaherrerot/ddrdataset` is correct. The mirror has one flat folder of 12,524 images and one top-level label file, not grading .txt lists. The reader now accepts a label CSV. Confirm the column names in the pod log.
-- ODIR: does `full_df.csv` have the columns the reader expects? Not read yet.
-- EyePACS: the download has no test labels (`retinopathy_solution.csv`). Only the 35,126 training images have labels. The 53,576 test images are unused.
-- Do EyePACS or APTOS images also appear in DDR? The build log reports the count.
+- How many cross-source duplicates does the build drop? The build log reports the count.
 
 ## Later improvements
 
