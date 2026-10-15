@@ -9,15 +9,15 @@ Last update: 2026-10-14
 | 1. Choose datasets, model design, split plan | Done (D-001 to D-010) |
 | 2. Download and build pipeline | Done. Tested on fake data only |
 | 3. Research Kaggle post-mortems | Done (docs/research/kaggle-postmortems.md) |
-| 4. RunPod access for the agent | Waiting for the user to add the RunPod connector |
-| 5. Run download and build on a pod | Not started |
+| 4. RunPod access for the agent | Done. Code is on GitHub (yungalyx/diabetic-retinopathy) |
+| 5. Run download and build on a pod | In progress. The pod runs scripts/pod_bootstrap.sh at boot |
 | 6. Training script (EfficientNet-B3, two heads) | Not started |
 | 7. RETFound experiment | Not started |
 
 ## Next actions
 
-1. User: add the RunPod MCP connector and store `KAGGLE_API_TOKEN` as a RunPod secret.
-2. Agent: create a pod (RTX 4090, 250 GB volume) and run the download and build.
+1. Agent: watch the pod log until `/workspace/status/DONE` or `FAILED` exists.
+2. Agent: check the build summary table against the expected image counts.
 3. Agent: verify the items in "Open questions" against the real files.
 4. Agent: write the training script.
 

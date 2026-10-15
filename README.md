@@ -47,7 +47,13 @@ Prerequisites:
 3. Create a pod with a volume of 250 GB or more.
 4. Store the Kaggle token as a RunPod secret. Add `KAGGLE_API_TOKEN` to the pod environment and set its value to that secret.
 
-Procedure:
+Automatic procedure: start the pod with this command. The script clones the repo, downloads, and builds. It writes `/workspace/status/DONE` or `/workspace/status/FAILED`.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/yungalyx/diabetic-retinopathy/main/scripts/pod_bootstrap.sh | bash
+```
+
+Manual procedure:
 
 1. Copy this folder to the pod.
 2. Run `bash scripts/runpod_setup.sh`.
