@@ -15,10 +15,18 @@ export UV_LINK_MODE=copy
 
 log() { echo "[job $(date -u +%H:%M:%S)] $*"; }
 
+ARCHIVE="/workspace/processed.tar"
 if [[ ! -f "$LOCAL/manifest.parquet" ]]; then
-    log "copying $SRC to local disk $LOCAL"
-    mkdir -p "$LOCAL"
-    cp -a "$SRC/." "$LOCAL/"
+    if [[ -f "$ARCHIVE" && "$ARCHIVE" -nt "$SRC/manifest.parquet" ]]; then
+        log "extracting $ARCHIVE to $LOCAL"
+        tar -xf "$ARCHIVE" -C "$(dirname "$LOCAL")"
+    else
+        log "copying $SRC to local disk $LOCAL (slow: many small files)"
+        mkdir -p "$LOCAL"
+        cp -a "$SRC/." "$LOCAL/"
+        log "writing $ARCHIVE so later runs copy one file"
+        tar -cf "$ARCHIVE" -C "$(dirname "$LOCAL")" "$(basename "$LOCAL")"
+    fi
 fi
 log "local data: $(du -sh "$LOCAL" | cut -f1)"
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader || true
