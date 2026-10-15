@@ -140,3 +140,10 @@ Set the operating threshold at 85% specificity on val (all sources). Apply it un
 Use 500 bootstrap resamples of whole patients. Report the 2.5 and 97.5 percentiles.
 `retina-dr evaluate` recomputes these metrics for a finished run. It writes `metrics_ci.json` and does not load PyTorch.
 Reason: 85% leaves a margin above the 80% specificity target. Images of one patient are not independent.
+
+## D-022 White background counts as background in the crop (2026-10-15)
+
+`crop_fundus` treats pixels with all channels at 235 or more as background, as it treats near-black pixels.
+After the crop, white pixels outside the inscribed ellipse become black.
+Reason: some source images have a white background. The old crop kept it, so the fundus was smaller and the corners were white.
+The fix takes effect at the next build. The current processed set still has the old crops.

@@ -11,6 +11,8 @@ DEFAULT_SIZE: Final = 512
 JPEG_QUALITY: Final = 95
 BLACK_THRESHOLD: Final = 10
 """Mean channel value at or below which a pixel counts as background."""
+WHITE_THRESHOLD: Final = 235
+"""Minimum channel value at or above which a pixel counts as white background (D-022)."""
 
 FINGERPRINT_SIZE: Final = 32
 """Side of the grayscale thumbnail used to find duplicate images."""
@@ -19,14 +21,25 @@ Pixels = NDArray[np.uint8]
 
 
 def crop_fundus(pixels: Pixels, threshold: int = BLACK_THRESHOLD) -> Pixels:
-    """Crop to the bounding box of non-black pixels, then pad to a centred square."""
-    mask = pixels.mean(axis=2) > threshold
+    """Crop to the bounding box of the fundus, then pad to a centred square.
+
+    Black and white pixels count as background. After the crop, white pixels outside the
+    inscribed ellipse become black, so every image has a black background (D-022).
+    """
+    black = pixels.mean(axis=2) <= threshold
+    white = pixels.min(axis=2) >= WHITE_THRESHOLD
+    mask = ~(black | white)
     rows = np.flatnonzero(mask.any(axis=1))
     cols = np.flatnonzero(mask.any(axis=0))
     if rows.size == 0:
         return pixels
-    crop = pixels[rows[0] : rows[-1] + 1, cols[0] : cols[-1] + 1]
+    crop = pixels[rows[0] : rows[-1] + 1, cols[0] : cols[-1] + 1].copy()
     height, width = crop.shape[:2]
+    yy, xx = np.mgrid[:height, :width]
+    outside = ((yy - (height - 1) / 2) / (height / 2)) ** 2 + (
+        (xx - (width - 1) / 2) / (width / 2)
+    ) ** 2 > 1.0
+    crop[outside & (crop.min(axis=2) >= WHITE_THRESHOLD)] = 0
     side = max(height, width)
     square = np.zeros((side, side, pixels.shape[2]), dtype=pixels.dtype)
     top, left = (side - height) // 2, (side - width) // 2

@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import numpy as np
+from numpy.typing import NDArray
 from PIL import Image
 
 from retina_dr.preprocess import (
@@ -28,6 +29,30 @@ def test_crop_pads_a_wide_fundus_to_square_with_black() -> None:
     assert cropped.shape == (100, 100, 3)
     assert cropped[0].max() == 0
     assert cropped[50].min() == 200
+
+
+def _fundus_on(background: int) -> NDArray[np.uint8]:
+    image = np.full((100, 200, 3), background, dtype=np.uint8)
+    yy, xx = np.mgrid[:100, :200]
+    disc = (yy - 50) ** 2 + (xx - 100) ** 2 <= 30**2
+    image[disc] = (150, 80, 40)
+    return image
+
+
+def test_crop_removes_a_white_background() -> None:
+    cropped = crop_fundus(_fundus_on(255))
+    assert cropped.shape == (61, 61, 3)
+    for corner in (cropped[0, 0], cropped[0, -1], cropped[-1, 0], cropped[-1, -1]):
+        assert corner.max() == 0
+    assert tuple(cropped[30, 30]) == (150, 80, 40)
+
+
+def test_crop_keeps_a_white_optic_disc_inside_the_fundus() -> None:
+    image = _fundus_on(0)
+    image[45:55, 115:125] = 255
+    cropped = crop_fundus(image)
+    assert cropped.shape == (61, 61, 3)
+    assert cropped[30, 45].min() == 255
 
 
 def test_crop_returns_input_unchanged_when_image_is_all_black() -> None:
