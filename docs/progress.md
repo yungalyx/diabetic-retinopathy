@@ -13,7 +13,7 @@ Last update: 2026-10-15
 | 5. Run download and build on a pod | Done 2026-10-15 07:15 UTC at commit 2ca78e1. 57,633 images in the manifest |
 | 6. Training script (EfficientNet-B3, two heads) | Done (D-013, D-014). 97 tests |
 | 6b. Baseline training run | Done 2026-10-15 16:31 UTC, run `b3-20261015-1520-603e880`, best epoch 9 |
-| 7. RETFound experiment | Paused 2026-10-15. RETFound weights are CC BY-NC 4.0 (D-015) |
+| 7. RETFound experiment | Not started. Research-only weights (D-015, D-020) |
 
 ## RunPod resources
 
@@ -28,13 +28,12 @@ The pod log is also written to `/workspace/bootstrap.log`.
 
 ## Next actions
 
-Paused 2026-10-15 for new context from the researcher (D-015 to D-019). Wait for Alex before more pod work.
+Work continues with research-only data and weights (D-020).
 
 1. Alex: decide if this repo stays public. The study protocol is in `docs/private/` and is not committed.
-2. Alex: confirm with the researcher if research-only data and weights are acceptable for Phase 1 (D-015).
-3. Agent: add the D-017 metrics. Recompute them from the baseline `predictions.parquet`. No training needed.
-4. Agent: add IDRiD and Messidor-2 as the external test (D-016), and provenance records (D-019).
-5. Agent: RETFound experiment (step 7) with a 10-epoch schedule, if D-015 allows it.
+2. Agent: add the D-017 metrics. Recompute them from the baseline `predictions.parquet`. No training needed.
+3. Agent: add IDRiD and Messidor-2 as the external test (D-016), and provenance records (D-019).
+4. Agent: RETFound experiment (step 7) with a 10-epoch schedule.
 
 ## Verified source facts (pod log, 2026-10-15)
 
@@ -79,7 +78,7 @@ Speed: about 185 images/s, 3.5 minutes per epoch, GPU at 97%.
 
 ## Open questions
 
-- Which sources does the researcher accept for Phase 1 training: research-only sources, or only sources with commercial permission?
+- For the researcher: research-only data and weights (DDR, RETFound, Kaggle competition data) are used now. Decide how to handle them for a commercial model (D-020).
 - ODIR-5K licence: find the original release and its terms.
 
 - Does the severity gap on DDR come from the model or from grader differences between sources? Check the DDR confusion matrix in predictions.parquet.

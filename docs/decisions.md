@@ -126,3 +126,10 @@ Reason: an accuracy number that excludes failed images hides how often the syste
 Record the source URL, download date, version, licence text, and file checksums for each release in the build output.
 Prefer original releases to Kaggle mirrors. DDR and ODIR come from Kaggle mirrors now.
 Reason: labels and image resolution must be traceable to the original release.
+
+## D-020 Continue with research-only data and weights (2026-10-15)
+
+Continue development with the sources and weights in D-015, including RETFound.
+The researcher decides how to handle them for a commercial model.
+Record the licence of each data source and each pretrained weight in the run config.
+Reason: Alex chose to continue and leave the commercial decision to the researcher.
