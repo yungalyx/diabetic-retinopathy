@@ -58,6 +58,17 @@ def test_duplicate_of_a_holdout_image_is_dropped_from_training_sources(
     assert "007-0003-000" in manifest["image_id"].to_list()
 
 
+def test_duplicates_with_conflicting_grades_are_all_dropped(
+    config: BuildConfig, raw_dir: Path
+) -> None:
+    aptos = raw_dir / "aptos"
+    (aptos / "train.csv").write_text("id_code,diagnosis\nabc123,0\ndef456,4\n")
+    shutil.copy(aptos / "train_images" / "abc123.png", aptos / "train_images" / "def456.png")
+    image_ids = build(config)["image_id"].to_list()
+    assert "abc123" not in image_ids
+    assert "def456" not in image_ids
+
+
 def test_rebuild_reuses_processed_images(config: BuildConfig) -> None:
     build(config)
     sample = next((config.out_dir / "images").rglob("*.jpg"))

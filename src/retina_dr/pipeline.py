@@ -80,21 +80,31 @@ def _process(records: list[Record], config: BuildConfig) -> list[int]:
 def _deduplicate(frame: pl.DataFrame, config: BuildConfig) -> pl.DataFrame:
     """Keep one row per image hash.
 
-    The holdout source wins, so no holdout image leaks into training.
+    Duplicates whose labels disagree are all dropped, because no copy can be trusted.
+    Otherwise the holdout source wins, so no holdout image leaks into training.
     """
     priority = [config.split.holdout_source, *SOURCES]
     rank = {source: priority.index(source) for source in SOURCES}
-    kept = (
-        frame.with_columns(
-            pl.col("source").replace_strict(rank, return_dtype=pl.Int8).alias("_rank")
+    conflicting = (
+        frame.group_by("dhash")
+        .agg(
+            pl.col("binary_label").n_unique().alias("_labels"),
+            pl.col("grade").drop_nulls().n_unique().alias("_grades"),
         )
+        .filter((pl.col("_labels") > 1) | (pl.col("_grades") > 1))
+        .select("dhash")
+    )
+    kept = (
+        frame.join(conflicting, on="dhash", how="anti")
+        .with_columns(pl.col("source").replace_strict(rank, return_dtype=pl.Int8).alias("_rank"))
         .sort("_rank", "image_id")
         .unique(subset="dhash", keep="first", maintain_order=True)
         .drop("_rank")
     )
-    dropped = frame.height - kept.height
-    if dropped:
-        log.warning("dropped %d duplicate images", dropped)
+    if conflicting.height:
+        log.warning("dropped %d image hashes with conflicting labels", conflicting.height)
+    if dropped := frame.height - kept.height:
+        log.warning("dropped %d duplicate images in total", dropped)
     return kept
 
 

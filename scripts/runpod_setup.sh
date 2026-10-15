@@ -14,10 +14,11 @@ fi
 
 uv sync --locked
 
-if [[ -z "${KAGGLE_USERNAME:-}" || -z "${KAGGLE_KEY:-}" ]] && [[ ! -f "$HOME/.kaggle/kaggle.json" ]]; then
+has_token=${KAGGLE_API_TOKEN:+yes}
+has_legacy=$([[ -n "${KAGGLE_USERNAME:-}" && -n "${KAGGLE_KEY:-}" ]] && echo yes || true)
+if [[ -z "$has_token" && -z "$has_legacy" && ! -f "$HOME/.kaggle/kaggle.json" ]]; then
     echo "ERROR: Kaggle credentials not found." >&2
-    echo "Set KAGGLE_USERNAME and KAGGLE_KEY as pod environment variables," >&2
-    echo "or copy kaggle.json to ~/.kaggle/kaggle.json and run: chmod 600 ~/.kaggle/kaggle.json" >&2
+    echo "Add KAGGLE_API_TOKEN as a pod environment variable (use a RunPod secret)." >&2
     exit 1
 fi
 

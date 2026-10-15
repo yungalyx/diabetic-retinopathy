@@ -33,7 +33,8 @@ Split rules:
 - All images of the holdout source (default DDR) go to `holdout`.
 - Other images go to `train` (80%), `val` (10%), or `test` (10%) by a hash of the patient ID.
 - All images of one patient get the same split.
-- When two images have the same hash, the build keeps one copy. The holdout copy has priority.
+- When two images have the same hash and the same labels, the build keeps one copy. The holdout copy has priority.
+- When two images have the same hash and different labels, the build drops all copies.
 
 ## Run on RunPod
 
@@ -44,7 +45,7 @@ Prerequisites:
    - https://www.kaggle.com/c/aptos2019-blindness-detection/rules
 2. Create a Kaggle API token at https://www.kaggle.com/settings (section "API").
 3. Create a pod with a volume of 250 GB or more.
-4. Add `KAGGLE_USERNAME` and `KAGGLE_KEY` as pod environment variables.
+4. Store the Kaggle token as a RunPod secret. Add `KAGGLE_API_TOKEN` to the pod environment and set its value to that secret.
 
 Procedure:
 
