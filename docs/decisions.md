@@ -90,3 +90,39 @@ Loader workers default to the cgroup CPU quota minus one, with one thread per wo
 Reason: the first full run trained at 35 images/s with the GPU idle (CPU at 97%).
 Tensor augmentation with hue cost 51 ms per image. PIL augmentation without hue costs 14 ms.
 os.cpu_count() reported the host CPUs inside the pod, so the loader oversubscribed its 8 vCPUs.
+
+## D-015 Licence status: the current model is research-only (2026-10-15)
+
+DDR images and labels are CC BY-NC-SA 4.0. RETFound weights are CC BY-NC 4.0. EyePACS and APTOS follow Kaggle competition rules. ODIR terms are not recorded.
+Treat every model trained in this repo as research-only.
+Settle data and weight permissions before training a model for commercial use.
+Reason: the researcher's dataset list (docs/research/dataset-licences.md). Public availability does not give commercial permission.
+
+## D-016 DDR is a development holdout. Add an untouched external test (2026-10-15)
+
+Supersedes the holdout role in D-004 and the selection rule in D-008.
+DDR stays out of training. Use DDR to compare models and settings.
+Use IDRiD Disease Grading and Messidor-2 as the untouched external test. Evaluate them once, on the frozen model only.
+Reason: D-008 chooses the model by its DDR score. After that choice, DDR is no longer an independent test.
+
+## D-017 Additional metrics (2026-10-15)
+
+Add these to each evaluation report:
+1. Sensitivity and specificity at one operating point. Choose the point on val.
+2. Sensitivity for vision-threatening DR (grade 3 or higher).
+3. Count of severe undergrading: grade 3-4 eyes predicted as grade 0-1.
+4. 95% confidence intervals by bootstrap over patients.
+Reason: the project reports accuracy at a fixed operating point with lower confidence bounds, not only AUC.
+
+## D-018 Keep ungradable images for a quality component (2026-10-15)
+
+Keep DDR grade-5 (ungradable) images in all_records.parquet with a quality label. Do not drop them silently.
+Report result yield: the fraction of images that get a grade.
+DeepDRiD quality labels are the second quality source.
+Reason: an accuracy number that excludes failed images hides how often the system gives no result.
+
+## D-019 Record provenance for each source (2026-10-15)
+
+Record the source URL, download date, version, licence text, and file checksums for each release in the build output.
+Prefer original releases to Kaggle mirrors. DDR and ODIR come from Kaggle mirrors now.
+Reason: labels and image resolution must be traceable to the original release.
