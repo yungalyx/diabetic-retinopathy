@@ -33,9 +33,9 @@ The pod log is also written to `/workspace/bootstrap.log`.
 
 ## Open questions
 
-- Is the DDR Kaggle slug `mariaherrerot/ddrdataset` correct, and does it have `DR_grading/*.txt`?
-- Does ODIR `full_df.csv` have the columns the reader expects?
-- Does the EyePACS download include `retinopathy_solution.csv` (test labels)?
+- DDR: the slug `mariaherrerot/ddrdataset` is correct. The mirror has one flat folder of 12,524 images and one top-level label file, not grading .txt lists. The reader now accepts a label CSV. Confirm the column names in the pod log.
+- ODIR: does `full_df.csv` have the columns the reader expects? Not read yet.
+- EyePACS: the download has no test labels (`retinopathy_solution.csv`). Only the 35,126 training images have labels. The 53,576 test images are unused.
 - Do EyePACS or APTOS images also appear in DDR? The build log reports the count.
 
 ## Later improvements

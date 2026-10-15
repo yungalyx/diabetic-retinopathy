@@ -4,7 +4,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from retina_dr.pipeline import MANIFEST_COLUMNS, BuildConfig, build
+from retina_dr.pipeline import MANIFEST_COLUMNS, BuildConfig, SourceReadError, build
 
 
 @pytest.fixture
@@ -80,3 +80,13 @@ def test_rebuild_reuses_processed_images(config: BuildConfig) -> None:
 def test_missing_source_folder_is_skipped(config: BuildConfig, raw_dir: Path) -> None:
     shutil.rmtree(raw_dir / "odir")
     assert "odir" not in build(config)["source"].to_list()
+
+
+def test_a_source_that_fails_to_parse_does_not_stop_the_others(
+    config: BuildConfig, raw_dir: Path
+) -> None:
+    (raw_dir / "aptos" / "train.csv").write_text("wrong,columns\n1,2\n")
+    with pytest.raises(SourceReadError, match="aptos"):
+        build(config)
+    manifest = pl.read_parquet(config.out_dir / "manifest.parquet")
+    assert set(manifest["source"].unique()) == {"eyepacs", "ddr", "odir"}

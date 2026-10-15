@@ -78,3 +78,24 @@ def test_different_files_with_one_name_are_dropped(tmp_path: Path, make_image: M
     write_fundus(tmp_path / "b" / "x.png", 2, size=(80, 60))
     make_image(tmp_path / "a" / "y.png", 3)
     assert set(index_images(tmp_path)) == {"y"}
+
+
+@pytest.mark.parametrize(("id_col", "grade_col"), [("id_code", "diagnosis"), ("image", "level")])
+def test_ddr_reads_grades_from_a_csv_when_no_txt_lists_exist(
+    tmp_path: Path, make_image: MakeImage, id_col: str, grade_col: str
+) -> None:
+    root = tmp_path / "ddr"
+    make_image(root / "DR_grading" / "DR_grading" / "a1.jpg", 1)
+    make_image(root / "DR_grading" / "DR_grading" / "b2.jpg", 2)
+    (root / "DR_grading.csv").write_text(f"{id_col},{grade_col}\na1.jpg,3\nb2,0\n")
+    records = _by_id(read_source("ddr", root))
+    assert {k: r.grade for k, r in records.items()} == {"a1": 3, "b2": 0}
+
+
+def test_ddr_error_names_the_label_formats_it_accepts(
+    tmp_path: Path, make_image: MakeImage
+) -> None:
+    make_image(tmp_path / "ddr" / "x.jpg", 1)
+    (tmp_path / "ddr" / "labels.csv").write_text("name,score\nx,1\n")
+    with pytest.raises(FileNotFoundError, match="id_code"):
+        read_source("ddr", tmp_path / "ddr")

@@ -52,17 +52,28 @@ def _run_job(job: _Job) -> int:
     return process_image(job.src, job.dst, job.size)
 
 
-def _read_all(config: BuildConfig) -> list[Record]:
+class SourceReadError(RuntimeError):
+    """One or more sources failed to parse. The manifest holds the other sources."""
+
+
+def _read_all(config: BuildConfig) -> tuple[list[Record], dict[Source, str]]:
+    """Read every source. A source that fails is logged and reported, not fatal."""
     records: list[Record] = []
+    failed: dict[Source, str] = {}
     for source in config.sources:
         root = config.raw_dir / source
         if not root.is_dir():
             log.warning("%s: no folder at %s, skipping", source, root)
             continue
-        found = read_source(source, root)
+        try:
+            found = read_source(source, root)
+        except (OSError, ValueError, pl.exceptions.PolarsError) as error:
+            log.error("%s: failed to read labels: %s", source, error)
+            failed[source] = str(error)
+            continue
         log.info("%s: %d labelled images", source, len(found))
         records.extend(found)
-    return records
+    return records, failed
 
 
 def _relative_path(record: Record) -> str:
@@ -110,7 +121,7 @@ def _deduplicate(frame: pl.DataFrame, config: BuildConfig) -> pl.DataFrame:
 
 def build(config: BuildConfig) -> pl.DataFrame:
     """Run the build stage and write manifest.parquet into out_dir. Rerunning reuses images."""
-    records = _read_all(config)
+    records, failed = _read_all(config)
     hashes = _process(records, config)
     frame = pl.DataFrame(
         {
@@ -139,6 +150,8 @@ def build(config: BuildConfig) -> pl.DataFrame:
     manifest = _deduplicate(frame, config).select(MANIFEST_COLUMNS)
     config.out_dir.mkdir(parents=True, exist_ok=True)
     manifest.write_parquet(config.out_dir / "manifest.parquet")
+    if failed:
+        raise SourceReadError(f"sources failed to read: {failed}")
     return manifest
 
 

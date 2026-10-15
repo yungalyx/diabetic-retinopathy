@@ -128,19 +128,58 @@ def read_aptos(root: Path) -> list[Record]:
     return _build("aptos", rows, index_images(root))
 
 
-def read_ddr(root: Path) -> list[Record]:
-    """DDR: DR_grading/{train,valid,test}.txt with lines "<file> <grade>". Grade 5 is ungradable."""
-    rows: list[tuple[str, str, int, int | None]] = []
+_DDR_CSV_COLUMNS: Final = (
+    ("id_code", "diagnosis"),
+    ("image", "level"),
+    ("image_id", "grade"),
+    ("filename", "label"),
+)
+"""(image, grade) column pairs that Kaggle mirrors of DDR use in a label CSV."""
+
+DdrRow = tuple[str, str, int, int | None]
+
+
+def _ddr_row(name: str, grade: int) -> DdrRow:
+    stem = Path(name).stem
+    return (stem, stem, grade, grade if grade <= MAX_GRADE else None)
+
+
+def _ddr_rows_from_txt(root: Path) -> list[DdrRow]:
+    rows: list[DdrRow] = []
     for split_file in sorted(root.rglob("*.txt")):
         for line in split_file.read_text().splitlines():
             parts = line.split()
-            if len(parts) != 2 or not parts[1].isdigit():
-                continue
-            stem = Path(parts[0]).stem
-            grade = int(parts[1])
-            rows.append((stem, stem, grade, grade if grade <= MAX_GRADE else None))
+            if len(parts) == 2 and parts[1].isdigit():
+                rows.append(_ddr_row(parts[0], int(parts[1])))
+    return rows
+
+
+def _ddr_rows_from_csv(root: Path) -> list[DdrRow]:
+    rows: list[DdrRow] = []
+    for csv_file in sorted(root.rglob("*.csv")):
+        frame = pl.read_csv(csv_file, infer_schema=False)
+        pair = next((p for p in _DDR_CSV_COLUMNS if set(p) <= set(frame.columns)), None)
+        if pair is None:
+            log.info("ddr: %s has columns %s, no known label pair", csv_file.name, frame.columns)
+            continue
+        log.info("ddr: reading labels from %s columns %s", csv_file.name, pair)
+        rows.extend(
+            _ddr_row(str(name), int(grade)) for name, grade in frame.select(pair).iter_rows()
+        )
+    return rows
+
+
+def read_ddr(root: Path) -> list[Record]:
+    """DDR: grading .txt lists ("<file> <grade>"), or a label CSV in a Kaggle mirror.
+
+    Grade 5 is ungradable and is dropped.
+    """
+    rows = _ddr_rows_from_txt(root) or _ddr_rows_from_csv(root)
     if not rows:
-        raise FileNotFoundError(f"no DDR grading .txt files found under {root}")
+        pairs = ", ".join(f"{a}/{b}" for a, b in _DDR_CSV_COLUMNS)
+        raise FileNotFoundError(
+            f"no DDR labels under {root}: expected grading .txt lists or a CSV with {pairs}"
+        )
     return _build("ddr", rows, index_images(root, _DDR_EXCLUDE))
 
 

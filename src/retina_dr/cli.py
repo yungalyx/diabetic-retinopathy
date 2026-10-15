@@ -12,7 +12,7 @@ import polars as pl
 
 from retina_dr.download import download_sources
 from retina_dr.labels import DEFAULT_BINARY_CUTOFF
-from retina_dr.pipeline import BuildConfig, build, summarize
+from retina_dr.pipeline import BuildConfig, SourceReadError, build, summarize
 from retina_dr.preprocess import DEFAULT_SIZE
 from retina_dr.records import SOURCES, Source
 from retina_dr.split import SplitConfig
@@ -69,11 +69,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         split=SplitConfig(holdout_source=holdout, seed=int(args.seed)),
         workers=int(args.workers),
     )
-    manifest = build(config)
+    code = 0
+    try:
+        manifest = build(config)
+    except SourceReadError as error:
+        print(f"ERROR: {error}")
+        manifest = pl.read_parquet(config.out_dir / "manifest.parquet")
+        code = 2
     with pl.Config(tbl_rows=-1):
         print(summarize(manifest))
     print(f"{manifest.height} images -> {config.out_dir / 'manifest.parquet'}")
-    return 0
+    return code
 
 
 if __name__ == "__main__":
