@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Run at pod boot: get the code, download the data, and build the processed set.
 # Raw data goes to the container disk (temporary). Processed data goes to the network volume.
-# On failure, wait for a new commit on GitHub, pull it, and retry. Raw downloads are kept.
+# After each run, wait for a new commit that changes code, pull it, and run again.
+# Raw downloads stay on the container disk between runs. Stop the pod to end billing.
 set -uo pipefail
 
 REPO_URL="https://github.com/yungalyx/diabetic-retinopathy"
@@ -46,22 +47,31 @@ else
 fi
 cd "$CODE"
 
-while true; do
-    rm -f "$STATUS/DONE" "$STATUS/FAILED"
-    log "running pipeline at commit $(git rev-parse --short HEAD)"
-    if run_pipeline; then
-        du -sh "$OUT" || true
-        log "DONE"
-        touch "$STATUS/DONE"
-        exit 0
-    fi
-    git rev-parse --short HEAD > "$STATUS/FAILED"
-    log "FAILED at commit $(git rev-parse --short HEAD). Waiting for a new commit to retry."
+wait_for_code_commit() {
+    local current changed
     current="$(git rev-parse HEAD)"
-    until git fetch -q origin main && [[ "$(git rev-parse origin/main)" != "$current" ]]; do
+    while true; do
         sleep "$POLL_SECONDS"
+        git fetch -q origin main || continue
+        [[ "$(git rev-parse origin/main)" == "$current" ]] && continue
+        changed="$(git diff --name-only "$current" origin/main -- src scripts pyproject.toml uv.lock)"
+        git pull -q --ff-only
+        current="$(git rev-parse HEAD)"
+        [[ -n "$changed" ]] && return 0
+        log "new commit $(git rev-parse --short HEAD) changes no code, still waiting"
     done
-    git pull -q --ff-only
-    log "new commit $(git rev-parse --short HEAD) found, restarting the boot script"
-    exec bash scripts/pod_bootstrap.sh
-done
+}
+
+rm -f "$STATUS/DONE" "$STATUS/FAILED"
+log "running pipeline at commit $(git rev-parse --short HEAD)"
+if run_pipeline; then
+    du -sh "$OUT" || true
+    git rev-parse --short HEAD > "$STATUS/DONE"
+    log "DONE at commit $(git rev-parse --short HEAD). Waiting for a code commit to run again."
+else
+    git rev-parse --short HEAD > "$STATUS/FAILED"
+    log "FAILED at commit $(git rev-parse --short HEAD). Waiting for a code commit to retry."
+fi
+wait_for_code_commit
+log "code commit $(git rev-parse --short HEAD) found, restarting the boot script"
+exec bash scripts/pod_bootstrap.sh

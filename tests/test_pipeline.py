@@ -5,6 +5,7 @@ import polars as pl
 import pytest
 
 from retina_dr.pipeline import MANIFEST_COLUMNS, BuildConfig, SourceReadError, build
+from tests.conftest import write_fundus
 
 
 @pytest.fixture
@@ -90,3 +91,23 @@ def test_a_source_that_fails_to_parse_does_not_stop_the_others(
         build(config)
     manifest = pl.read_parquet(config.out_dir / "manifest.parquet")
     assert set(manifest["source"].unique()) == {"eyepacs", "ddr", "odir"}
+
+
+def test_different_fundus_images_are_never_merged(tmp_path: Path) -> None:
+    raw = tmp_path / "raw" / "aptos"
+    rows = ["id_code,diagnosis"]
+    for i in range(40):
+        write_fundus(raw / "train_images" / f"img{i}.png", seed=100 + i)
+        rows.append(f"img{i},{i % 5}")
+    (raw / "train.csv").write_text("\n".join(rows) + "\n")
+    config = BuildConfig(raw_dir=tmp_path / "raw", out_dir=tmp_path / "out", size=64, workers=1)
+    assert build(config).height == 40
+
+
+def test_all_records_file_keeps_dropped_duplicates(config: BuildConfig, raw_dir: Path) -> None:
+    aptos_images = raw_dir / "aptos" / "train_images"
+    shutil.copy(aptos_images / "abc123.png", aptos_images / "def456.png")
+    build(config)
+    every = pl.read_parquet(config.out_dir / "all_records.parquet")
+    assert {"abc123", "def456"} <= set(every["image_id"].to_list())
+    assert every.filter(pl.col("image_id").is_in(["abc123", "def456"]))["dup_group"].n_unique() == 1

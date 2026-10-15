@@ -55,3 +55,10 @@ Reason: regression with tuned cutpoints beat classification in both competitions
 Use full rotation, flips, scale, and color augmentation. Use 8x dihedral test-time augmentation. Start with mild class rebalancing and decay it to the natural distribution during training. Do not copy-oversample grades 3-4.
 Do not give the model the original image size or any source ID.
 Reason: these methods worked consistently in top solutions. Image size correlates with source and grade, so it is a shortcut that does not transfer.
+
+## D-011 Duplicate detection by fingerprint distance (2026-10-15)
+
+Supersedes the hash part of D-006.
+Two images are duplicates when their 32x32 grayscale fingerprints differ by RMS 4 or less (0-255 scale).
+Reason: the 64-bit dhash of a 9x8 thumbnail collided for most fundus photos. The first full build dropped 44% of images.
+The build logs the nearest-neighbour distance distribution so the threshold can be checked against real data.

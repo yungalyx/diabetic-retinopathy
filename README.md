@@ -26,15 +26,17 @@ The build writes `data/processed/manifest.parquet`. Each row is one image.
 | `grade` | ICDR grade 0-4 for the severity head. Null for ODIR |
 | `binary_label` | 1 when the grade is at or above the cutoff (default 2, referable DR) |
 | `split` | `train`, `val`, `test`, or `holdout` |
-| `dhash` | 64-bit image hash used to remove duplicates |
+| `dup_group` | Duplicate group id. Images in one group are copies of one photo |
 
 Split rules:
 
 - All images of the holdout source (default DDR) go to `holdout`.
 - Other images go to `train` (80%), `val` (10%), or `test` (10%) by a hash of the patient ID.
 - All images of one patient get the same split.
-- When two images have the same hash and the same labels, the build keeps one copy. The holdout copy has priority.
-- When two images have the same hash and different labels, the build drops all copies.
+- Two images are duplicates when their 32x32 grayscale fingerprints differ by RMS 4 or less (0-255 scale).
+- When duplicates have the same labels, the build keeps one copy. The holdout copy has priority.
+- When duplicates have different labels, the build drops all copies.
+- `all_records.parquet` holds every row before duplicate removal.
 
 ## Run on RunPod
 

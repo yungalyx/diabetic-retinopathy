@@ -42,7 +42,7 @@ The pod log is also written to `/workspace/bootstrap.log`.
 
 ## Open questions
 
-- How many cross-source duplicates does the build drop? The build log reports the count.
+- Run 1 (2026-10-15 05:52 UTC) dropped 25,303 of 57,952 images. Cause: the 64-bit dhash of a 9x8 thumbnail collides for most fundus photos. Fixed with 32x32 fingerprints and an RMS threshold of 4. Check the new nearest-neighbour distance log and duplicate counts.
 
 ## Later improvements
 
