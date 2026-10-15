@@ -62,3 +62,10 @@ Supersedes the hash part of D-006.
 Two images are duplicates when their 32x32 grayscale fingerprints differ by RMS 4 or less (0-255 scale).
 Reason: the 64-bit dhash of a 9x8 thumbnail collided for most fundus photos. The first full build dropped 44% of images.
 The build logs the nearest-neighbour distance distribution so the threshold can be checked against real data.
+
+## D-012 Duplicate threshold is RMS 2 (2026-10-15)
+
+Supersedes the threshold in D-011 (RMS 4).
+Reason: the nearest-neighbour distance distribution on the real data was 0-1: 516, 1-2: 28, 2-4: 684, 4-8: 23,643 images.
+Copies sit below 1. The gap is at 1-2. Images at 2-4 are the near edge of the distinct-image distribution.
+At RMS 4 the build dropped 877 images, with 111 groups of conflicting labels, which shows false matches.

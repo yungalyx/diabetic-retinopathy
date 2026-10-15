@@ -9,8 +9,12 @@ from typing import Final
 import numpy as np
 from numpy.typing import NDArray
 
-DUPLICATE_RMS: Final = 4.0
-"""Fingerprint RMS distance (0-255 scale) at or below which two images are duplicates."""
+DUPLICATE_RMS: Final = 2.0
+"""Fingerprint RMS distance (0-255 scale) at or below which two images are duplicates.
+
+On the real data (57,952 images) the nearest-neighbour distances were 0-1: 516, 1-2: 28,
+2-4: 684, 4-8: 23,643. Copies sit below 1; the gap is at 1-2; distinct images start above 2.
+"""
 
 DEFAULT_CHUNK: Final = 2048
 
