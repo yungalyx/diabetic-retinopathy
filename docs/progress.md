@@ -31,9 +31,10 @@ The pod log is also written to `/workspace/bootstrap.log`.
 Work continues with research-only data and weights (D-020).
 
 1. Alex: decide if this repo stays public. The study protocol is in `docs/private/` and is not committed.
-2. Agent: inspect a sample of the 121 DDR grade 4 images predicted as grade 0.
-3. Agent: add IDRiD and Messidor-2 as the external test (D-016), and provenance records (D-019).
-4. Agent: RETFound experiment (step 7) with a 10-epoch schedule.
+2. Agent: fix `crop_fundus` for white backgrounds. Add a test with a white-corner image.
+3. Agent: add an image quality output (D-018). Train it on DDR grade 5 and DeepDRiD quality labels.
+4. Agent: add IDRiD and Messidor-2 as the external test (D-016), and provenance records (D-019).
+5. Agent: RETFound experiment (step 7) with a 10-epoch schedule.
 
 ## Verified source facts (pod log, 2026-10-15)
 
@@ -104,12 +105,35 @@ Findings:
 1. Grade 2 spreads over predicted grades 0-4. 36% of DDR grade 2 is predicted as 0 or 1. This agrees with a different grade 2 boundary between DDR and EyePACS graders.
 2. 121 of 910 DDR grade 4 images are predicted as grade 0. Grade 3 has only 4. This is a specific failure. Possible causes: laser scars after treatment, vitreous hemorrhage, or label errors. Inspect these images.
 
+### DDR grade 4 predicted as grade 0 (2026-10-15, `scripts/analysis/ddr_grade4_failures.py`)
+
+The model is confident on these 121 images: median referral probability 0.0003, maximum 0.067. They are not borderline cases.
+A visual check of 64 random thumbnails (128 px, by the agent, not a clinician) gave these groups:
+
+| Group | Count of 64 | Example look |
+|---|---|---|
+| Retina hidden by haze (probably vitreous hemorrhage or media opacity) | about 20 | Blurred, green or yellow image, few visible vessels |
+| Large hemorrhage | about 12 | Dark red areas in front of the retina |
+| Retina looks normal or mild at 128 px | about 19 | Needs full-resolution review. Possible small new vessels or label errors |
+| Laser scars or dense exudates | about 5 | Many round pale spots |
+| Fibrous tissue or traction | about 5 | Pale membranes along vessels |
+| Crop failure: white corners | 2 | `crop_fundus` did not remove a white background |
+
+Image statistics (mean over up to 150 images per group): the failures are darker (5.8% dark pixels, against 1.3% for correct grade 0) and less sharp than grade 0.
+The correctly graded grade 4 images are also blurred, so image quality alone does not explain the failure.
+The grade 4 image names in DDR use the pattern `007-NNNN`. The grade 0 names use a date. DDR grade 4 can come from a different collection.
+
+Conclusions:
+1. The model has no "cannot grade" output. It calls an image with a hidden retina grade 0 with high confidence. This is the gradability risk in the study protocol.
+2. Advanced disease (large hemorrhage, scars, fibrous tissue) is rare in training. EyePACS grade 4 is about 2%.
+3. About a third of the failures need full-resolution review by a clinician before we call them model errors.
+
 ## Open questions
 
 - For the researcher: research-only data and weights (DDR, RETFound, Kaggle competition data) are used now. Decide how to handle them for a commercial model (D-020).
 - ODIR-5K licence: find the original release and its terms.
 
-- Why are 121 DDR grade 4 images predicted as grade 0? Inspect a sample.
+- Are the normal-looking DDR grade 4 images label errors? A clinician must review them at full resolution.
 
 ## Later improvements
 
