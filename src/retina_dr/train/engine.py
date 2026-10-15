@@ -29,7 +29,7 @@ from retina_dr.train.metrics import (
     tune_cutpoints,
 )
 from retina_dr.train.model import TwoHeadNet, build_model
-from retina_dr.train.report import evaluate_predictions, sigmoid
+from retina_dr.train.report import evaluate_predictions, operating_threshold, sigmoid
 from retina_dr.train.sampling import rebalance_alpha, sample_weights, strata_from_labels
 
 log = logging.getLogger(__name__)
@@ -314,7 +314,7 @@ def train(config: TrainConfig) -> Path:
         preds = predict(model, eval_loaders[split], device, tta=config.tta)
         frames.append(
             splits[split]
-            .select("path", "source", "image_id", "split", "binary_label", "grade")
+            .select("path", "source", "image_id", "patient_id", "split", "binary_label", "grade")
             .with_columns(
                 pl.Series("logit", preds.logits),
                 pl.Series("prob", sigmoid(preds.logits)),
@@ -332,10 +332,16 @@ def train(config: TrainConfig) -> Path:
         pl.Series("pred_grade", apply_cutpoints(predictions["severity"].to_numpy(), cuts))
     )
     predictions.write_parquet(config.run_dir / "predictions.parquet")
-    rows = evaluate_predictions(predictions, cuts)
+    threshold = operating_threshold(predictions)
+    rows = evaluate_predictions(predictions, cuts, threshold)
     _write_json(
         config.run_dir / "metrics.json",
-        {"best_epoch": checkpoint["epoch"], "cutpoints": cuts, "rows": rows},
+        {
+            "best_epoch": checkpoint["epoch"],
+            "cutpoints": cuts,
+            "threshold": threshold,
+            "rows": rows,
+        },
     )
     with pl.Config(tbl_rows=-1, tbl_cols=-1, tbl_width_chars=200):
         log.info("results (cutpoints tuned on val: %s)\n%s", cuts, pl.DataFrame(rows))

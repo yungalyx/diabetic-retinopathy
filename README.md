@@ -95,3 +95,9 @@ Use `--limit 600 --epochs 1` for a smoke run. See D-013 in `docs/decisions.md` f
 
 On the pod, `scripts/pod_job.sh` runs after the build. It copies the processed set to local disk and runs a smoke run and the full run.
 It stops the pod when the full run finishes.
+
+## Evaluate
+
+Run `uv run retina-dr evaluate --run-dir runs/<name> --data-dir data/processed`.
+The command reads `predictions.parquet` and the cutpoints in `metrics.json`. It writes `metrics_ci.json`.
+It adds the operating point, vision-threatening DR sensitivity, severe undergrading, and patient-level 95% intervals. See D-017 and D-021.

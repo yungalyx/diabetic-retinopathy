@@ -66,7 +66,21 @@ def _parser() -> argparse.ArgumentParser:
     tr.add_argument("--no-tta", action="store_true")
     tr.add_argument("--log-every", type=int, default=200)
     tr.add_argument("--device", default="auto")
+    ev = commands.add_parser("evaluate", help="recompute metrics of a finished run (D-017)")
+    ev.add_argument("--run-dir", type=Path, required=True)
+    ev.add_argument("--data-dir", type=Path, default=Path("data/processed"))
+    ev.add_argument("--resamples", type=int, default=500)
     return parser
+
+
+def _evaluate(args: argparse.Namespace) -> int:
+    from retina_dr.train.report import OPERATING_SPECIFICITY, reevaluate_run
+
+    threshold, rows = reevaluate_run(Path(args.run_dir), Path(args.data_dir), int(args.resamples))
+    print(f"threshold {threshold:.4f} (val specificity {OPERATING_SPECIFICITY})")
+    with pl.Config(tbl_rows=-1, tbl_cols=-1, tbl_width_chars=400):
+        print(pl.DataFrame(rows))
+    return 0
 
 
 def _train(args: argparse.Namespace) -> int:
@@ -101,6 +115,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.command == "train":
         return _train(args)
+    if args.command == "evaluate":
+        return _evaluate(args)
     sources = parse_sources(str(args.sources))
 
     if args.command == "download":

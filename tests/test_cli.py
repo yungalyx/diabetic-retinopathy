@@ -66,3 +66,36 @@ def test_train_command_runs_a_tiny_training(tmp_path: Path) -> None:
     )
     assert code == 0
     assert (tmp_path / "run" / "metrics.json").is_file()
+
+
+def test_evaluate_command_recomputes_metrics_with_patient_ids(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import json
+
+    data = tmp_path / "data"
+    data.mkdir()
+    pl.DataFrame(
+        {"path": ["a.jpg", "b.jpg", "c.jpg", "d.jpg"], "patient_id": ["1", "1", "2", "3"]}
+    ).write_parquet(data / "manifest.parquet")
+    run = tmp_path / "run"
+    run.mkdir()
+    pl.DataFrame(
+        {
+            "path": ["a.jpg", "b.jpg", "c.jpg", "d.jpg"],
+            "source": ["eyepacs"] * 4,
+            "split": ["val", "val", "holdout", "holdout"],
+            "binary_label": [0, 1, 0, 1],
+            "grade": [0, 3, 1, 4],
+            "prob": [0.1, 0.9, 0.2, 0.8],
+            "severity": [0.1, 3.0, 1.0, 3.9],
+        }
+    ).write_parquet(run / "predictions.parquet")
+    (run / "metrics.json").write_text(json.dumps({"cutpoints": [0.5, 1.5, 2.5, 3.5]}))
+    code = main(["evaluate", "--run-dir", str(run), "--data-dir", str(data), "--resamples", "10"])
+    assert code == 0
+    result = json.loads((run / "metrics_ci.json").read_text())
+    assert result["threshold"] == 0.1
+    holdout = next(r for r in result["rows"] if r["split"] == "holdout")
+    assert holdout["sens_op"] == 1.0
+    assert "holdout" in capsys.readouterr().out

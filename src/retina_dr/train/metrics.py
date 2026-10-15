@@ -1,5 +1,6 @@
-"""Evaluation metrics in plain NumPy: quadratic weighted kappa, ROC AUC, and cutpoint tuning."""
+"""Evaluation metrics in plain NumPy: kappa, ROC AUC, operating points, bootstrap, cutpoints."""
 
+from collections.abc import Callable
 from typing import Final
 
 import numpy as np
@@ -54,17 +55,71 @@ def roc_auc(y_true: ArrayLike, score: ArrayLike) -> float:
     return float((ranks[y == 1].sum() - n_pos * (n_pos + 1) / 2) / (n_pos * n_neg))
 
 
+def threshold_at_specificity(y_true: ArrayLike, score: ArrayLike, specificity: float) -> float:
+    """Lowest score threshold that keeps at least `specificity` of negatives at or below it.
+
+    NaN when there are no negatives.
+    """
+    y = np.asarray(y_true, dtype=np.int64)
+    negatives = np.sort(np.asarray(score, dtype=np.float64)[y == 0])
+    if len(negatives) == 0:
+        return float("nan")
+    index = min(int(np.ceil(specificity * len(negatives))) - 1, len(negatives) - 1)
+    return float(negatives[max(index, 0)])
+
+
+def rates_at_threshold(
+    y_true: ArrayLike, score: ArrayLike, threshold: float
+) -> tuple[float, float]:
+    """Sensitivity and specificity when scores above `threshold` count as positive."""
+    y = np.asarray(y_true, dtype=np.int64)
+    flagged = np.asarray(score, dtype=np.float64) > threshold
+    positives, negatives = y == 1, y == 0
+    sens = float(flagged[positives].mean()) if positives.any() else float("nan")
+    spec = float((~flagged[negatives]).mean()) if negatives.any() else float("nan")
+    return sens, spec
+
+
 def sensitivity_at_specificity(y_true: ArrayLike, score: ArrayLike, specificity: float) -> float:
     """Share of positives above the score that keeps at least `specificity` of negatives below."""
     y = np.asarray(y_true, dtype=np.int64)
-    s = np.asarray(score, dtype=np.float64)
-    negatives = np.sort(s[y == 0])
-    positives = s[y == 1]
-    if len(negatives) == 0 or len(positives) == 0:
+    if not (y == 1).any():
         return float("nan")
-    index = min(int(np.ceil(specificity * len(negatives))) - 1, len(negatives) - 1)
-    threshold = negatives[max(index, 0)]
-    return float((positives > threshold).mean())
+    threshold = threshold_at_specificity(y, score, specificity)
+    if np.isnan(threshold):
+        return float("nan")
+    return rates_at_threshold(y, score, threshold)[0]
+
+
+def cluster_bootstrap_ci(
+    clusters: ArrayLike,
+    statistic: Callable[[IntArray], float],
+    n_resamples: int,
+    seed: int = 0,
+    level: float = 0.95,
+) -> tuple[float, float]:
+    """Percentile interval of `statistic` over resamples of whole clusters (patients).
+
+    `statistic` takes row indices. A resample draws clusters with replacement and keeps all
+    rows of each drawn cluster. NaN when there are no resamples or every value is NaN.
+    """
+    if n_resamples <= 0:
+        return float("nan"), float("nan")
+    _, codes = np.unique(np.asarray(clusters), return_inverse=True)
+    n_clusters = int(codes.max()) + 1 if len(codes) else 0
+    if n_clusters == 0:
+        return float("nan"), float("nan")
+    rows = np.arange(len(codes), dtype=np.int64)
+    rng = np.random.default_rng(seed)
+    values = np.empty(n_resamples, dtype=np.float64)
+    for i in range(n_resamples):
+        counts = np.bincount(rng.integers(0, n_clusters, n_clusters), minlength=n_clusters)
+        values[i] = statistic(np.repeat(rows, counts[codes]))
+    if np.isnan(values).all():
+        return float("nan"), float("nan")
+    tail = (1.0 - level) / 2.0 * 100.0
+    low, high = np.nanpercentile(values, [tail, 100.0 - tail])
+    return float(low), float(high)
 
 
 def apply_cutpoints(values: ArrayLike, cuts: tuple[float, ...]) -> IntArray:

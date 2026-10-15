@@ -31,7 +31,7 @@ The pod log is also written to `/workspace/bootstrap.log`.
 Work continues with research-only data and weights (D-020).
 
 1. Alex: decide if this repo stays public. The study protocol is in `docs/private/` and is not committed.
-2. Agent: add the D-017 metrics. Recompute them from the baseline `predictions.parquet`. No training needed.
+2. Agent: run `retina-dr evaluate` on the baseline run (D-017, D-021). The code is done.
 3. Agent: add IDRiD and Messidor-2 as the external test (D-016), and provenance records (D-019).
 4. Agent: RETFound experiment (step 7) with a 10-epoch schedule.
 

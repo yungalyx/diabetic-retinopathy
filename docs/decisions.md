@@ -133,3 +133,10 @@ Continue development with the sources and weights in D-015, including RETFound.
 The researcher decides how to handle them for a commercial model.
 Record the licence of each data source and each pretrained weight in the run config.
 Reason: Alex chose to continue and leave the commercial decision to the researcher.
+
+## D-021 Operating point and bootstrap settings (2026-10-15)
+
+Set the operating threshold at 85% specificity on val (all sources). Apply it unchanged to test and holdout.
+Use 500 bootstrap resamples of whole patients. Report the 2.5 and 97.5 percentiles.
+`retina-dr evaluate` recomputes these metrics for a finished run. It writes `metrics_ci.json` and does not load PyTorch.
+Reason: 85% leaves a margin above the 80% specificity target. Images of one patient are not independent.

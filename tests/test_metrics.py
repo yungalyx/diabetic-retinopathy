@@ -6,9 +6,12 @@ import pytest
 from retina_dr.train.metrics import (
     DEFAULT_CUTPOINTS,
     apply_cutpoints,
+    cluster_bootstrap_ci,
     quadratic_weighted_kappa,
+    rates_at_threshold,
     roc_auc,
     sensitivity_at_specificity,
+    threshold_at_specificity,
     tune_cutpoints,
 )
 
@@ -83,3 +86,53 @@ def test_tuned_cutpoints_fix_a_systematic_shift() -> None:
     tuned = quadratic_weighted_kappa(grades, apply_cutpoints(values, cuts))
     assert tuned > fixed + 0.02
     assert list(cuts) == sorted(cuts)
+
+
+def test_threshold_at_specificity_keeps_the_target_share_of_negatives_at_or_below() -> None:
+    y = np.array([0] * 10 + [1] * 2)
+    s = np.array([*range(10), 20, 30], dtype=float)
+    threshold = threshold_at_specificity(y, s, 0.8)
+    assert threshold == 7.0
+    assert (s[y == 0] <= threshold).mean() >= 0.8
+
+
+def test_rates_at_threshold_count_scores_above_the_threshold_as_positive() -> None:
+    y = np.array([0, 0, 0, 0, 1, 1, 1, 1])
+    s = np.array([0.1, 0.2, 0.6, 0.3, 0.7, 0.8, 0.4, 0.9])
+    sens, spec = rates_at_threshold(y, s, 0.5)
+    assert sens == pytest.approx(0.75)
+    assert spec == pytest.approx(0.75)
+
+
+def test_rates_at_threshold_give_nan_for_a_missing_class() -> None:
+    sens, spec = rates_at_threshold(np.array([1, 1]), np.array([0.2, 0.9]), 0.5)
+    assert sens == pytest.approx(0.5)
+    assert math.isnan(spec)
+
+
+def test_cluster_bootstrap_ci_contains_the_mean_and_narrows_with_more_clusters() -> None:
+    rng = np.random.default_rng(0)
+
+    def width(n_clusters: int) -> tuple[float, float, float]:
+        values = rng.normal(1.0, 1.0, n_clusters * 2)
+        clusters = np.repeat(np.arange(n_clusters), 2)
+        low, high = cluster_bootstrap_ci(
+            clusters, lambda idx: float(values[idx].mean()), n_resamples=300, seed=1
+        )
+        return low, high, float(values.mean())
+
+    low, high, mean = width(50)
+    assert low < mean < high
+    big_low, big_high, _ = width(2000)
+    assert big_high - big_low < high - low
+
+
+def test_cluster_bootstrap_ci_resamples_whole_clusters() -> None:
+    # Two clusters with constant values: every resample mean is 0, 0.5 or 1.
+    values = np.array([0.0, 0.0, 0.0, 1.0, 1.0, 1.0])
+    clusters = np.array([0, 0, 0, 1, 1, 1])
+    low, high = cluster_bootstrap_ci(
+        clusters, lambda idx: float(values[idx].mean()), n_resamples=200, seed=0
+    )
+    assert low == 0.0
+    assert high == 1.0

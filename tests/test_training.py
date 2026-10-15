@@ -1,4 +1,5 @@
 import json
+import math
 from pathlib import Path
 
 import numpy as np
@@ -100,11 +101,35 @@ def test_report_gives_perfect_scores_for_perfect_predictions() -> None:
             "severity": [0.0, 1.0, 2.0, 0.0, 3.0, 4.0],
         }
     )
-    rows = evaluate_predictions(frame, (0.5, 1.5, 2.5, 3.5))
+    rows = evaluate_predictions(frame, (0.5, 1.5, 2.5, 3.5), threshold=0.5, n_resamples=20)
     overall = next(r for r in rows if r["source"] == "all")
     assert overall["auc"] == 1.0
     assert overall["qwk_tuned"] == 1.0
+    assert overall["sens_op"] == overall["spec_op"] == 1.0
+    assert overall["sens_vtdr_op"] == 1.0
+    assert overall["severe_undergraded"] == 0
+    assert overall["auc_lo"] == overall["auc_hi"] == 1.0
     assert {r["source"] for r in rows} == {"all", "a", "b"}
+
+
+def test_report_counts_severe_undergrading_and_missed_vision_threatening_eyes() -> None:
+    frame = pl.DataFrame(
+        {
+            "split": ["test"] * 4,
+            "source": ["a"] * 4,
+            "patient_id": ["p1", "p1", "p2", "p3"],
+            "binary_label": [0, 1, 1, 1],
+            "grade": [0, 3, 4, 2],
+            "prob": [0.1, 0.2, 0.9, 0.8],
+            "severity": [0.0, 1.0, 3.6, 2.0],
+        }
+    )
+    row = evaluate_predictions(frame, (0.5, 1.5, 2.5, 3.5), threshold=0.5, n_resamples=0)[0]
+    assert row["vtdr_images"] == 2
+    assert row["sens_vtdr_op"] == 0.5
+    assert row["severe_undergraded"] == 1
+    assert row["severe_undergraded_rate"] == 0.5
+    assert math.isnan(float(row["auc_lo"]))
 
 
 def test_training_writes_checkpoint_history_predictions_and_metrics(tmp_path: Path) -> None:
@@ -131,6 +156,8 @@ def test_training_writes_checkpoint_history_predictions_and_metrics(tmp_path: Pa
     assert np.isfinite(predictions["prob"].to_numpy()).all()
     metrics = json.loads((run / "metrics.json").read_text())
     assert len(metrics["cutpoints"]) == 4
+    assert 0.0 <= metrics["threshold"] <= 1.0
+    assert "patient_id" in predictions.columns
     assert any(r["split"] == "holdout" for r in metrics["rows"])
 
 
