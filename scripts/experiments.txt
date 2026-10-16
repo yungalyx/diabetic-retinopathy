@@ -4,3 +4,6 @@
 b3-e10 --model efficientnet_b3 --epochs 10
 b5ns-e10 --model tf_efficientnet_b5.ns_jft_in1k --epochs 10 --batch-size 12 --lr 2e-4
 convnexts-e10 --model convnext_small.fb_in22k_ft_in1k_384 --epochs 10 --batch-size 16 --lr 1e-4
+# Seed check for the best backbone (D-024).
+b3-e10-s1 --model efficientnet_b3 --epochs 10 --seed 1
+b3-e10-s2 --model efficientnet_b3 --epochs 10 --seed 2

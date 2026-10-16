@@ -58,3 +58,18 @@ Decisions are in `docs/decisions.md`. Current status is in `docs/progress.md`.
 - Each backbone now uses the input normalization of its pretrained weights.
 - Runs (10 epochs each): EfficientNet-B3, EfficientNet-B5 Noisy Student, ConvNeXt-Small 22k (D-023).
 - Pod `csdzc0mp7r3ejv` (RTX 4090, 16 vCPU, $0.89/hr) started 22:24 UTC. The old training pod could not start: its host GPU was taken.
+
+## 2026-10-16 (morning): Backbone comparison result
+
+Runs finished at 01:58 UTC. The pod stopped itself. Total GPU time about 3.5 hours (about $3.10).
+
+| Run | Best epoch | Test AUC | DDR AUC | DDR sensitivity (lower bound) | DDR kappa | DDR VTDR sensitivity | DDR severe undergrades | Minutes per epoch |
+|---|---|---|---|---|---|---|---|---|
+| Baseline B3, 15 epochs | 9 | 0.939 | 0.914 | 0.788 (0.778) | 0.764 | 0.801 | 193 (16.8%) | 3.5 (8 vCPU) |
+| B3, 10 epochs | 4 | 0.956 | 0.969 | 0.877 (0.868) | 0.832 | 0.955 | 72 (6.3%) | 4.4 |
+| B5 Noisy Student | 9 | 0.959 | 0.963 | 0.875 (0.866) | 0.800 | 0.912 | 131 (11.4%) | 8.7 |
+| ConvNeXt-Small 22k | 9 | 0.957 | 0.947 | 0.869 (0.860) | 0.826 | 0.904 | 105 (9.2%) | 5.4 |
+
+- B3 with 10 epochs is best on DDR. Its best checkpoint is epoch 4. The larger backbones do not help.
+- The B3 gain over the baseline is large. The only change is the schedule (10 epochs, best epoch 4 instead of 9). Seed runs check if the gain is real (D-024).
+- RETFound access check: the token works (user `alxlin`), but both repositories return 403. The access requests are not approved yet.

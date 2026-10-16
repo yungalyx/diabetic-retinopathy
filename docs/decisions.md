@@ -154,3 +154,10 @@ Train three backbones on the same manifest and splits, 10 epochs each: Efficient
 List the runs in `scripts/experiments.txt`. Compare them on the DDR holdout.
 Use the input normalization from the pretrained config of each backbone.
 Reason: the baseline peaked at epoch 9. The B5 and ConvNeXt weights are Apache 2.0, unlike the RETFound weights (CC BY-NC 4.0). RETFound needs gated access on HuggingFace.
+
+## D-024 EfficientNet-B3 with 10 epochs is the current best model (2026-10-16)
+
+Result of D-023 on the DDR holdout: B3 AUC 0.969, B5 0.963, ConvNeXt-Small 0.947. B3 also has the best DDR kappa (0.832) and the fewest severe undergrades (72).
+The larger backbones do not improve DDR results and train 1.2 to 2 times slower.
+Train B3 with seeds 1 and 2 before the choice is final. The baseline (15 epochs) gave DDR AUC 0.914, so the run-to-run spread can be large.
+Reason: D-008 requires 2-3 seeds per model choice.
