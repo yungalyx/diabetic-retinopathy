@@ -1,6 +1,7 @@
 """Command line: `retina-dr download` then `retina-dr build`."""
 
 import argparse
+import json
 import logging
 import os
 import sys
@@ -79,6 +80,19 @@ def _parser() -> argparse.ArgumentParser:
     en.add_argument("--quality-run", type=Path, default=None, help="run that gives reject_prob")
     en.add_argument("--resamples", type=int, default=500)
 
+    bx = commands.add_parser("build-external", help="process the external test sets (D-035)")
+    bx.add_argument("--raw-dir", type=Path, required=True, help="holds idrid/, deepdrid/, ...")
+    bx.add_argument("--out-dir", type=Path, required=True)
+    bx.add_argument("--size", type=int, default=DEFAULT_SIZE)
+
+    sx = commands.add_parser("score-external", help="score the frozen model once (D-029)")
+    sx.add_argument("--data-dir", type=Path, required=True)
+    sx.add_argument("--run-dirs", type=Path, nargs="+", required=True)
+    sx.add_argument("--quality-run", type=Path, required=True)
+    sx.add_argument("--ensemble-run", type=Path, required=True)
+    sx.add_argument("--out-dir", type=Path, required=True)
+    sx.add_argument("--resamples", type=int, default=500)
+
     ev = commands.add_parser("evaluate", help="recompute metrics of a finished run (D-017)")
     ev.add_argument("--run-dir", type=Path, required=True)
     ev.add_argument("--data-dir", type=Path, default=Path("data/processed"))
@@ -104,6 +118,29 @@ def _ensemble(args: argparse.Namespace) -> int:
     print(f"ensemble of {len(runs)} runs, threshold {threshold:.4f}")
     with pl.Config(tbl_rows=-1, tbl_cols=-1, tbl_width_chars=400):
         print(pl.DataFrame(rows))
+    return 0
+
+
+def _build_external(args: argparse.Namespace) -> int:
+    from retina_dr.external import build_external
+
+    manifest = build_external(Path(args.raw_dir), Path(args.out_dir), int(args.size))
+    print(manifest.group_by("source").len().sort("source"))
+    return 0
+
+
+def _score_external(args: argparse.Namespace) -> int:
+    from retina_dr.train.external_eval import score_external
+
+    result = score_external(
+        Path(args.data_dir),
+        [Path(d) for d in args.run_dirs],
+        Path(args.quality_run),
+        Path(args.ensemble_run),
+        Path(args.out_dir),
+        n_resamples=int(args.resamples),
+    )
+    print(json.dumps(result, indent=2))
     return 0
 
 
@@ -153,6 +190,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _train(args)
     if args.command == "add-quality":
         return _add_quality(args)
+    if args.command == "build-external":
+        return _build_external(args)
+    if args.command == "score-external":
+        return _score_external(args)
     if args.command == "ensemble":
         return _ensemble(args)
     if args.command == "evaluate":

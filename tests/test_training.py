@@ -389,8 +389,9 @@ def test_eye_level_averages_the_images_of_one_eye() -> None:
             "split": ["test"] * 3,
             "source": ["s"] * 3,
             "patient_id": ["p", "p", "q"],
-            "binary_label": [1, 1, 0],
-            "grade": [3, 3, 0],
+            "binary_label": [0, 1, 0],
+            "grade": [1, 3, 0],
+            "quality": [2, 0, 2],
             "prob": [0.2, 0.6, 0.1],
             "severity": [2.0, 4.0, 0.0],
             "reject_prob": [0.1, 0.3, 0.0],
@@ -401,6 +402,9 @@ def test_eye_level_averages_the_images_of_one_eye() -> None:
     assert eyes["prob"].to_list() == pytest.approx([0.4, 0.1])
     assert eyes["severity"].to_list() == pytest.approx([3.0, 0.0])
     assert eyes["images"].to_list() == [2, 1]
+    assert eyes["grade"].to_list() == [3, 0]
+    assert eyes["binary_label"].to_list() == [1, 0]
+    assert eyes["quality"].to_list() == [0, 2]
 
 
 def test_eye_level_treats_each_image_as_one_eye_without_an_eye_id() -> None:

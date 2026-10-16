@@ -73,7 +73,11 @@ def system_grades(
     return grades
 
 
-_EYE_FIRST: Final = ("split", "source", "patient_id", "binary_label", "grade", "quality")
+_EYE_FIRST: Final = ("split", "source", "patient_id")
+_EYE_MAX: Final = ("binary_label", "grade")
+"""An eye takes the worst image grade (conservative when two images disagree)."""
+_EYE_MIN: Final = ("quality",)
+"""An eye is reject only when every image is reject (REJECT is the highest code)."""
 _EYE_MEAN: Final = ("prob", "logit", "severity", "reject_prob")
 
 
@@ -81,15 +85,19 @@ def to_eye_level(predictions: pl.DataFrame) -> pl.DataFrame:
     """One row per eye (D-030): the mean output over the images of that eye.
 
     Uses the eye_id column. Without it, each image is one eye (all current public sources).
-    Labels are per eye, so the first image gives them.
+    Grades: the highest image grade. Quality: the best image quality.
     """
     frame = predictions
     if "eye_id" not in frame.columns:
         frame = frame.with_columns(pl.col("path").alias("eye_id"))
     first = [c for c in _EYE_FIRST if c in frame.columns]
+    highest = [c for c in _EYE_MAX if c in frame.columns]
+    lowest = [c for c in _EYE_MIN if c in frame.columns]
     means = [c for c in _EYE_MEAN if c in frame.columns]
     return frame.group_by("eye_id", maintain_order=True).agg(
         *(pl.col(c).first() for c in first),
+        *(pl.col(c).max() for c in highest),
+        *(pl.col(c).min() for c in lowest),
         *(pl.col(c).mean() for c in means),
         pl.len().alias("images"),
     )
