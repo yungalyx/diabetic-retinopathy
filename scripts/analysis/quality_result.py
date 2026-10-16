@@ -4,12 +4,13 @@ Run on a CPU pod with the network volume at /workspace.
 """
 
 import json
+import sys
 from pathlib import Path
 
 import polars as pl
 
 RUNS = Path("/workspace/runs")
-RUN = RUNS / "exp" / "b3-e10-q"
+RUN = Path(sys.argv[1]) if len(sys.argv) > 1 else RUNS / "exp" / "b3-e10-q"
 BASELINE = RUNS / "b3-20261015-1520-603e880"
 KEYS = (
     "split",
@@ -36,7 +37,9 @@ KEYS = (
 
 def main() -> None:
     metrics = json.loads((RUN / "metrics.json").read_text())
-    print("THRESHOLDS", metrics["best_epoch"], metrics["threshold"], metrics["quality_threshold"])
+    print(
+        "THRESHOLDS", metrics.get("best_epoch"), metrics["threshold"], metrics["quality_threshold"]
+    )
     for row in metrics["rows"]:
         print("ROW", {k: row.get(k) for k in KEYS})
     reject = float(metrics["quality_threshold"])
@@ -52,7 +55,7 @@ def main() -> None:
     ddr4 = predictions.filter((pl.col("split") == "holdout") & (pl.col("grade") == 4))
     print("DDR4_REJECT_RATE", round(float((ddr4["reject_prob"] > reject).mean()), 4))
     for line in (RUNS.parent / "bootstrap.log").read_text().splitlines()[-4000:]:
-        if any(k in line for k in ("DOWNLOAD_OK", "ACCESS_ERR", "quality labels", "FAILED")):
+        if any(k in line for k in ("quality labels", "FAILED", "ensemble", "finished", "EyeQ")):
             print("LOG", line[:300])
 
 
