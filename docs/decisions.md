@@ -242,3 +242,11 @@ The quality run lowered DR results on DDR: AUC 0.943 against 0.960-0.969 for the
 Keep the frozen DR ensemble (D-028) unchanged. Train the quality model separately: train rows with an EyeQ label only, quality loss only, checkpoint by val quality AUC.
 The ensemble takes referral and severity from the DR members and the reject probability from the quality model.
 Reason: the shared training (quality loss and reject masking) changed the DR heads. A separate model keeps the DR result that we already measured.
+
+## D-034 One decision rule: the referral head decides, the grade follows (2026-10-16)
+
+Supersedes the "OR" referral rule in D-030.
+Refer when the referral probability is above the val threshold. A referred eye gets grade max(severity grade, 2). An eye that is not referred gets grade min(severity grade, 1).
+Report `head_disagreement` (how often the two heads disagree before this rule), `qwk_system`, and `severe_undergraded_system` from the system grades.
+In every current public source, one image is one eye (EyePACS and ODIR have one image per eye; APTOS, DDR, IDRiD, and Messidor-2 have no eye link). `to_eye_level` averages the images of one eye for later clinic data.
+Reason: the "OR" rule changes the operating point that val fixed. This rule keeps the val threshold and gives one consistent output per eye.

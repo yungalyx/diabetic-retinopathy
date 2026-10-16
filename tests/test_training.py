@@ -352,3 +352,69 @@ def test_quality_task_trains_only_on_rows_with_a_quality_label(tmp_path: Path) -
     record = json.loads((run / "history.jsonl").read_text().splitlines()[0])
     assert record["train_rows"] == 12
     assert record["val_score"] == record["val_quality_auc"]
+
+
+def test_system_grade_follows_the_referral_decision() -> None:
+    from retina_dr.train.report import system_grades
+
+    prob = np.array([0.9, 0.9, 0.1, 0.1])
+    pred = np.array([0, 3, 4, 1])
+    assert system_grades(prob, pred, threshold=0.5).tolist() == [2, 3, 1, 1]
+
+
+def test_report_counts_head_disagreement_and_system_kappa() -> None:
+    frame = pl.DataFrame(
+        {
+            "split": ["test"] * 4,
+            "source": ["a"] * 4,
+            "binary_label": [1, 1, 0, 0],
+            "grade": [2, 4, 0, 1],
+            "prob": [0.9, 0.1, 0.1, 0.1],
+            "severity": [0.0, 4.0, 0.0, 1.0],
+        }
+    )
+    row = evaluate_predictions(frame, (0.5, 1.5, 2.5, 3.5), threshold=0.5, n_resamples=0)[0]
+    assert row["head_disagreement"] == 0.5
+    assert row["severe_undergraded_system"] == 1
+    assert float(row["qwk_system"]) < float(row["qwk_tuned"])
+
+
+def test_eye_level_averages_the_images_of_one_eye() -> None:
+    from retina_dr.train.report import to_eye_level
+
+    frame = pl.DataFrame(
+        {
+            "path": ["a1", "a2", "b1"],
+            "eye_id": ["a", "a", "b"],
+            "split": ["test"] * 3,
+            "source": ["s"] * 3,
+            "patient_id": ["p", "p", "q"],
+            "binary_label": [1, 1, 0],
+            "grade": [3, 3, 0],
+            "prob": [0.2, 0.6, 0.1],
+            "severity": [2.0, 4.0, 0.0],
+            "reject_prob": [0.1, 0.3, 0.0],
+        }
+    )
+    eyes = to_eye_level(frame).sort("eye_id")
+    assert eyes.height == 2
+    assert eyes["prob"].to_list() == pytest.approx([0.4, 0.1])
+    assert eyes["severity"].to_list() == pytest.approx([3.0, 0.0])
+    assert eyes["images"].to_list() == [2, 1]
+
+
+def test_eye_level_treats_each_image_as_one_eye_without_an_eye_id() -> None:
+    from retina_dr.train.report import to_eye_level
+
+    frame = pl.DataFrame(
+        {
+            "path": ["a", "b"],
+            "split": ["test"] * 2,
+            "source": ["s"] * 2,
+            "binary_label": [1, 0],
+            "grade": [3, 0],
+            "prob": [0.2, 0.6],
+            "severity": [2.0, 4.0],
+        }
+    )
+    assert to_eye_level(frame).height == 2

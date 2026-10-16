@@ -56,6 +56,45 @@ def _share(mask: NDArray[np.bool_], within: NDArray[np.bool_]) -> float:
     return _round(float(mask[within].mean())) if within.any() else _NAN
 
 
+REFERABLE_GRADE: Final = 2
+
+
+def system_grades(
+    prob: NDArray[np.float64], pred_grade: NDArray[np.int64], threshold: float
+) -> NDArray[np.int64]:
+    """One decision rule (D-034): the referral head decides, the grade follows it.
+
+    A referred image gets at least grade 2. An image that is not referred gets at most grade 1.
+    """
+    referred = prob > threshold
+    raised = np.maximum(pred_grade, REFERABLE_GRADE)
+    lowered = np.minimum(pred_grade, REFERABLE_GRADE - 1)
+    grades: NDArray[np.int64] = np.where(referred, raised, lowered).astype(np.int64)
+    return grades
+
+
+_EYE_FIRST: Final = ("split", "source", "patient_id", "binary_label", "grade", "quality")
+_EYE_MEAN: Final = ("prob", "logit", "severity", "reject_prob")
+
+
+def to_eye_level(predictions: pl.DataFrame) -> pl.DataFrame:
+    """One row per eye (D-030): the mean output over the images of that eye.
+
+    Uses the eye_id column. Without it, each image is one eye (all current public sources).
+    Labels are per eye, so the first image gives them.
+    """
+    frame = predictions
+    if "eye_id" not in frame.columns:
+        frame = frame.with_columns(pl.col("path").alias("eye_id"))
+    first = [c for c in _EYE_FIRST if c in frame.columns]
+    means = [c for c in _EYE_MEAN if c in frame.columns]
+    return frame.group_by("eye_id", maintain_order=True).agg(
+        *(pl.col(c).first() for c in first),
+        *(pl.col(c).mean() for c in means),
+        pl.len().alias("images"),
+    )
+
+
 def rejected_rows(
     frame: pl.DataFrame, threshold: float, reject_threshold: float
 ) -> NDArray[np.bool_]:
@@ -144,6 +183,16 @@ def _metrics(
     row["severe_undergraded_rate"] = (
         _round(float(severe.sum() / vtdr.sum())) if vtdr.any() else _NAN
     )
+    system = system_grades(prob, pred_grade, threshold)
+    row["head_disagreement"] = (
+        _round(float(((prob > threshold) != (pred_grade >= REFERABLE_GRADE)).mean()))
+        if group.height
+        else _NAN
+    )
+    row["qwk_system"] = (
+        _round(quadratic_weighted_kappa(grade[graded], system[graded])) if graded.any() else _NAN
+    )
+    row["severe_undergraded_system"] = int((vtdr & (system <= SEVERE_UNDERGRADE_MAX)).sum())
     if reject_threshold is not None and "reject_prob" in group.columns:
         row.update(_quality_metrics(group, threshold, reject_threshold))
         rejected = rejected_rows(group, threshold, reject_threshold)
