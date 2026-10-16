@@ -14,7 +14,7 @@ Last update: 2026-10-15
 | 6. Training script (EfficientNet-B3, two heads) | Done (D-013, D-014). 97 tests |
 | 6b. Baseline training run | Done 2026-10-15 16:31 UTC, run `b3-20261015-1520-603e880`, best epoch 9 |
 | 7. Model comparison | Done. Frozen configuration: B3, 10 epochs, 3-seed ensemble (D-024, D-026, D-028). RETFound stopped |
-| 8. Quality head, per-eye results, external test | In progress (D-025, D-029 to D-031) |
+| 8. Quality head, per-eye results, external test | Done 2026-10-16 except Messidor-2 (waits for ADCIS access). External result in D-036 |
 
 ## RunPod resources
 

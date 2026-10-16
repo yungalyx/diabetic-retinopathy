@@ -260,3 +260,13 @@ External sets for the one-time test (D-029):
 Supersedes the rebuild in D-031. Do not rebuild or retrain before the external test. The frozen model is the D-028 ensemble `b3-e10-ens3-q`, recorded in `runs/exp/b3-e10-ens3-q/frozen_model.json` (member commits, best.pt SHA-256, manifest SHA-256, thresholds, cutpoints).
 Reason: the D-022 crop fix changes 25 of 57,952 training images and had no measurable effect. A retrain makes a new model that DDR cannot judge without bias. External images use the fixed crop, so their backgrounds match the other training images.
 The analysis plan is in `docs/private/analysis-plan-external.md` because it uses unpublished study criteria. Its SHA-256 is committed in `docs/analysis-plan-external.sha256` before any external image is scored.
+
+## D-036 External test result and what follows (2026-10-16)
+
+The frozen model (D-035) passed sensitivity, yield, equal rejection, and severe undergrading on IDRiD and DeepDRiD. It failed specificity on both (0.754 and 0.410 at the frozen threshold) and system kappa on IDRiD (0.634). See the worklog for the full table.
+The AUC is high (0.992 and 0.931). The failure comes from the threshold, which was set on val images from other cameras.
+Decisions:
+1. Report this result as it is. Do not change the model or the threshold and score these sets again. They are now spent, like DDR.
+2. The clinic phase must set the referral and reject thresholds on clinic tuning data before its frozen test. This result is the evidence for that step.
+3. Messidor-2 runs later with the same plan and the same frozen model, when ADCIS access exists.
+4. Add a 95% interval for the system kappa to the scoring code before the next external or clinic test.

@@ -123,3 +123,17 @@ Candidate `b3-e10-ens3-q`: the 3 DR seeds plus the separate quality model `quali
 - Wrote `frozen_model.json` (member commits, best.pt hashes, manifest hash, thresholds, cutpoints).
 - Committed the plan hash (`docs/analysis-plan-external.sha256`) before scoring. The scoring pod checked the hash and stored the plan on the volume.
 - First scoring attempt stopped at model load: the DR members were trained before the quality head existed, so their checkpoints have no quality-head weights. No prediction was made. Fix: allow only the missing quality-head weights (`load_checkpoint`). This is a loading fix, not a change to the model or the plan.
+- Second scoring run finished at 19:47 UTC. Commit 0f7f14a, external manifest SHA-256 4bf899a8... Results are per eye, with the frozen thresholds.
+
+| Set | Eyes (referable) | AUC | Sensitivity (95% interval) | Specificity (95% interval) | System kappa | Yield | Rejected: referable / not | Severe undergrades (system) |
+|---|---|---|---|---|---|---|---|---|
+| DeepDRiD | 200 (82) | 0.992 | 1.000 (1.000-1.000) | 0.754 (0.651-0.843) | 0.859 | 98.0% | 0% / 3.4% | 0 of 46 |
+| IDRiD | 103 (64) | 0.931 | 0.953 (0.895-1.000) | 0.410 (0.271-0.563) | 0.634 | 100% | 0% / 0% | 0 of 32 |
+
+- Verdict under the plan: both sets fail the specificity criterion. IDRiD also fails the kappa criterion. Sensitivity, yield, equal rejection, and severe undergrading pass on both sets.
+- Cause: the val threshold (probability 0.040) is too low for these cameras. The ranking is good (AUC 0.992 and 0.931), so a threshold set on data from the target camera can fix this. At 90% specificity, sensitivity is 0.988 (DeepDRiD) and 0.844 (IDRiD). These numbers are diagnostic only; they use the test labels and do not change the plan result.
+- IDRiD kappa: the referral head refers 59% of non-referable eyes, and the system rule (D-034) raises those eyes to grade 2. The severity head alone gives kappa 0.775.
+- Secondary, DeepDRiD quality: quality AUC 0.809, reject recall 3.6% at the frozen threshold. The quality label mapping is not verified.
+- Deviation from the plan: the scoring code reports a 95% interval for the severity-head kappa, not for the system kappa. The system kappa has a point value only.
+- Label check: DeepDRiD 82 referable eyes = 164 referable images / 2. IDRiD 64 referable = 32 + 19 + 13 images of grade 2-4. Both agree with the build counts.
+- Cost: about $0.40 (GPU and CPU pods). All pods deleted.
