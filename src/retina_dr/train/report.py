@@ -20,6 +20,7 @@ from retina_dr.train.metrics import (
     roc_auc,
     sensitivity_at_specificity,
     threshold_at_specificity,
+    tune_cutpoints,
     youden_threshold,
 )
 
@@ -234,6 +235,62 @@ def reevaluate_run(
         "rows": rows,
     }
     (run_dir / "metrics_ci.json").write_text(json.dumps(result, indent=2))
+    return threshold, rows
+
+
+_KEY_COLUMNS: Final = (
+    "path",
+    "source",
+    "image_id",
+    "patient_id",
+    "split",
+    "binary_label",
+    "grade",
+    "quality",
+)
+_MEAN_COLUMNS: Final = ("logit", "severity", "reject_prob")
+
+
+def ensemble_runs(
+    run_dirs: list[Path], out_dir: Path, n_resamples: int = DEFAULT_RESAMPLES
+) -> tuple[float, list[MetricRow]]:
+    """Average the predictions of finished runs, then tune and evaluate as one model (D-026).
+
+    Averages the binary logit, the severity value, and reject_prob when every run has it.
+    Tunes cutpoints and thresholds on val only. Writes predictions.parquet and metrics.json.
+    """
+    frames = [pl.read_parquet(d / "predictions.parquet") for d in run_dirs]
+    keys = [c for c in _KEY_COLUMNS if all(c in f.columns for f in frames)]
+    means = [c for c in _MEAN_COLUMNS if all(c in f.columns for f in frames)]
+    stacked = pl.concat([f.select(*keys, *means) for f in frames], how="vertical_relaxed")
+    averaged = stacked.group_by(keys, maintain_order=True).agg(pl.col(means).mean())
+    order = frames[0].select("path").with_row_index("_order")
+    predictions = averaged.join(order, on="path").sort("_order").drop("_order")
+    predictions = predictions.with_columns(
+        pl.Series("prob", sigmoid(predictions["logit"].to_numpy().astype(np.float64)))
+    )
+    val = predictions.filter((pl.col("split") == "val") & pl.col("grade").is_not_null())
+    cuts = (
+        tune_cutpoints(val["severity"].to_numpy(), val["grade"].to_numpy())
+        if val.height
+        else DEFAULT_CUTPOINTS
+    )
+    predictions = predictions.with_columns(
+        pl.Series("pred_grade", apply_cutpoints(predictions["severity"].to_numpy(), cuts))
+    )
+    threshold = operating_threshold(predictions)
+    reject = quality_threshold(predictions) if "reject_prob" in means else None
+    rows = evaluate_predictions(predictions, cuts, threshold, reject, n_resamples=n_resamples)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    predictions.write_parquet(out_dir / "predictions.parquet")
+    result = {
+        "members": [str(d) for d in run_dirs],
+        "cutpoints": list(cuts),
+        "threshold": threshold,
+        "quality_threshold": reject,
+        "rows": rows,
+    }
+    (out_dir / "metrics.json").write_text(json.dumps(result, indent=2))
     return threshold, rows
 
 

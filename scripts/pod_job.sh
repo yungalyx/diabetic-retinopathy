@@ -66,6 +66,16 @@ grep -v '^\s*#' "$EXPERIMENTS" | grep -v '^\s*$' | while read -r name args; do
     uv run python -c "import json,sys; [print('RESULT', sys.argv[1], r) for r in json.load(open(sys.argv[2]))['rows'] if r['source']=='all']" "$name" "$run/metrics.json" </dev/null || true
 done
 
+grep -v '^\s*#' scripts/ensembles.txt | grep -v '^\s*$' | while read -r name members; do
+    out="$RUNS/exp/$name"
+    [[ -f "$out/metrics.json" ]] && continue
+    dirs=()
+    for member in $members; do dirs+=("$RUNS/exp/$member"); done
+    for dir in "${dirs[@]}"; do [[ -f "$dir/predictions.parquet" ]] || continue 2; done
+    log "ensemble $name from $members"
+    uv run retina-dr ensemble --run-dirs "${dirs[@]}" --out-dir "$out" </dev/null || log "FAILED ensemble $name"
+done
+
 if [[ -n "${RUNPOD_POD_ID:-}" ]] && command -v runpodctl >/dev/null 2>&1; then
     log "stopping pod $RUNPOD_POD_ID"
     runpodctl stop pod "$RUNPOD_POD_ID" || log "runpodctl stop failed; stop the pod manually"

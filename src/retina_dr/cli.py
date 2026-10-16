@@ -72,6 +72,11 @@ def _parser() -> argparse.ArgumentParser:
     aq.add_argument("--data-dir", type=Path, default=Path("data/processed"))
     aq.add_argument("--eyeq-csv", type=Path, required=True)
 
+    en = commands.add_parser("ensemble", help="average finished runs and evaluate (D-026)")
+    en.add_argument("--run-dirs", type=Path, nargs="+", required=True)
+    en.add_argument("--out-dir", type=Path, required=True)
+    en.add_argument("--resamples", type=int, default=500)
+
     ev = commands.add_parser("evaluate", help="recompute metrics of a finished run (D-017)")
     ev.add_argument("--run-dir", type=Path, required=True)
     ev.add_argument("--data-dir", type=Path, default=Path("data/processed"))
@@ -85,6 +90,17 @@ def _add_quality(args: argparse.Namespace) -> int:
     manifest.write_parquet(path)
     counts = manifest.group_by("quality").len().sort("quality")
     print(f"quality labels added to {path}: {dict(counts.iter_rows())}")
+    return 0
+
+
+def _ensemble(args: argparse.Namespace) -> int:
+    from retina_dr.train.report import ensemble_runs
+
+    runs = [Path(d) for d in args.run_dirs]
+    threshold, rows = ensemble_runs(runs, Path(args.out_dir), int(args.resamples))
+    print(f"ensemble of {len(runs)} runs, threshold {threshold:.4f}")
+    with pl.Config(tbl_rows=-1, tbl_cols=-1, tbl_width_chars=400):
+        print(pl.DataFrame(rows))
     return 0
 
 
@@ -133,6 +149,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _train(args)
     if args.command == "add-quality":
         return _add_quality(args)
+    if args.command == "ensemble":
+        return _ensemble(args)
     if args.command == "evaluate":
         return _evaluate(args)
     sources = parse_sources(str(args.sources))

@@ -172,3 +172,12 @@ Report yield, rejection rate in positive and negative eyes, reject recall on Eye
 Reason: the DDR failure analysis showed that the model calls images with a hidden retina grade 0. The study protocol requires 90% DR yield and limits on acceptance of inadequate images.
 The quality head learns only from human quality labels. It cannot learn to reject hard disease cases to improve the grading loss.
 The DDR Kaggle mirror has no ungradable images (12,522 of 13,673), so DDR cannot test reject recall. DeepDRiD quality labels can do this later.
+
+## D-026 Seed result and seed ensembles (2026-10-16)
+
+B3 with 10 epochs, three seeds, on DDR: AUC 0.969 / 0.960 / 0.966, kappa 0.832 / 0.828 / 0.810, severe undergrades 72 / 94 / 147.
+All three seeds beat the 15-epoch baseline (AUC 0.914). The gain is real. Keep B3 with 10 epochs.
+Severe undergrading changes much between seeds. Average the seeds into one ensemble and compare it as one model.
+`retina-dr ensemble` averages the logits, severity values, and reject probabilities of finished runs. It tunes cutpoints and thresholds on val only.
+List ensembles in `scripts/ensembles.txt`. `pod_job.sh` builds them after the training runs.
+Reason: averaging seeds usually lowers variance. It costs no training, only 3 times the inference.

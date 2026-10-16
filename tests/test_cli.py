@@ -99,3 +99,38 @@ def test_evaluate_command_recomputes_metrics_with_patient_ids(
     holdout = next(r for r in result["rows"] if r["split"] == "holdout")
     assert holdout["sens_op"] == 1.0
     assert "holdout" in capsys.readouterr().out
+
+
+def test_ensemble_command_averages_runs_and_writes_metrics(tmp_path: Path) -> None:
+    import json
+
+    rows = {
+        "path": ["a", "b", "c", "d", "e", "f"],
+        "source": ["eyepacs"] * 6,
+        "patient_id": ["1", "2", "3", "4", "5", "6"],
+        "split": ["val", "val", "val", "holdout", "holdout", "holdout"],
+        "binary_label": [0, 1, 0, 0, 1, 1],
+        "grade": [0, 3, 1, 0, 2, 4],
+    }
+    runs = []
+    for index, shift in enumerate((-1.0, 1.0)):
+        run = tmp_path / f"run{index}"
+        run.mkdir()
+        logits = [-2.0 + shift, 2.0 + shift, -1.0 + shift, -2.0 + shift, 1.0 + shift, 3.0 + shift]
+        pl.DataFrame(
+            {
+                **rows,
+                "logit": logits,
+                "severity": [0.0 + shift, 3.0, 1.0, 0.0, 2.0, 4.0 - shift],
+            }
+        ).write_parquet(run / "predictions.parquet")
+        runs.append(str(run))
+    out = tmp_path / "ensemble"
+    code = main(["ensemble", "--run-dirs", *runs, "--out-dir", str(out), "--resamples", "0"])
+    assert code == 0
+    predictions = pl.read_parquet(out / "predictions.parquet")
+    assert predictions["logit"].to_list() == [-2.0, 2.0, -1.0, -2.0, 1.0, 3.0]
+    assert predictions["severity"].to_list()[0] == 0.0
+    metrics = json.loads((out / "metrics.json").read_text())
+    assert metrics["members"] == runs
+    assert any(r["split"] == "holdout" for r in metrics["rows"])

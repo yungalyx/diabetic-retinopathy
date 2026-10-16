@@ -1,0 +1,3 @@
+# One ensemble per line: <name> <member run names in runs/exp>. See D-026.
+# pod_job.sh builds each ensemble whose members exist and which has no metrics.json.
+b3-e10-ens3 b3-e10 b3-e10-s1 b3-e10-s2
