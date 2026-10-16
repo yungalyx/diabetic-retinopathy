@@ -98,3 +98,20 @@ Seed runs (B3, 10 epochs) on DDR:
 - Added `--task quality`, quality runs in ensembles, run provenance in `config.json`, and pinned EyeQ labels (D-031). 129 tests pass.
 - RETFound: both weight files downloaded (access granted). Not used (D-028).
 - Pod `6tj7n7p9whuejm` (RTX 4090) trains `quality-b3` and builds `b3-e10-ens3-q`.
+
+## 2026-10-16 (afternoon): Separate quality model and final candidate
+
+Candidate `b3-e10-ens3-q`: the 3 DR seeds plus the separate quality model `quality-b3`, findings-first rule (D-032, D-033). Reject threshold 0.970 from val.
+
+| Split | DR AUC | Yield | Rejected: referable / not referable | Sensitivity / specificity on decided images | VTDR called not referable |
+|---|---|---|---|---|---|
+| Val | 0.971 | 94.5% | 0.2% / 6.9% | 0.938 / 0.839 | 2 of 192 |
+| Test | 0.962 | 94.6% | 1.2% / 6.6% | 0.928 / 0.852 | 0 of 215 |
+| DDR (development) | 0.972 | 95.8% | 3.7% / 4.8% | 0.918 / 0.943 | 33 of 1,146 |
+
+- The DR results are the same as the ensemble without quality (D-033 works).
+- Quality AUC on EyeQ test rows is 0.992.
+- ODIR yield is 85.7% (17.5% of non-referable ODIR images rejected). The quality model treats some ODIR camera images as poor. This shows camera dependence. Set the reject threshold again on clinic tuning data.
+- Of the baseline's 121 DDR grade 4 images called grade 0, the candidate refers 67 and the quality model flags 72.
+- `quality-b3` config.json has the full commit, manifest SHA-256, and licences (D-031 works).
+- Deleted pods `csdzc0mp7r3ejv`, `ae6hziisf38gyo`, `ojsos1hojydwt0`, `6tj7n7p9whuejm` and the CPU readers (approved by Alex).
