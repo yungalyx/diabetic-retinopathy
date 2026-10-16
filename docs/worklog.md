@@ -73,3 +73,19 @@ Runs finished at 01:58 UTC. The pod stopped itself. Total GPU time about 3.5 hou
 - B3 with 10 epochs is best on DDR. Its best checkpoint is epoch 4. The larger backbones do not help.
 - The B3 gain over the baseline is large. The only change is the schedule (10 epochs, best epoch 4 instead of 9). Seed runs check if the gain is real (D-024).
 - RETFound access check: the token works (user `alxlin`), but both repositories return 403. The access requests are not approved yet.
+
+## 2026-10-16 (late morning): Seeds, ensemble, and quality head
+
+Seed runs (B3, 10 epochs) on DDR:
+
+| Run | DDR AUC | DDR sensitivity (lower bound) | DDR kappa | DDR VTDR sensitivity | DDR severe undergrades |
+|---|---|---|---|---|---|
+| Seed 0 | 0.969 | 0.877 (0.868) | 0.832 | 0.955 | 72 |
+| Seed 1 | 0.960 | 0.847 (0.837) | 0.828 | 0.891 | 94 |
+| Seed 2 | 0.966 | 0.877 (0.867) | 0.810 | 0.907 | 147 |
+| Ensemble of 3 | 0.972 | 0.885 (0.876) | 0.843 | 0.937 | 77 (6.7%) |
+
+- All seeds beat the baseline. The ensemble is better than each seed on DDR AUC and kappa. Test AUC 0.962, kappa 0.853.
+- Added the quality head (D-025) and `retina-dr ensemble` (D-026). 122 tests pass.
+- No RTX 4090 was free in EU-RO-1. The quality run uses an RTX PRO 4000 Blackwell pod (`ojsos1hojydwt0`, $0.57/hr).
+- Deleted the old pods `00difbrelhsfon` and `rqcktnogjy5zqf` (approved by Alex).
