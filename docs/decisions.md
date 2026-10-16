@@ -181,3 +181,46 @@ Severe undergrading changes much between seeds. Average the seeds into one ensem
 `retina-dr ensemble` averages the logits, severity values, and reject probabilities of finished runs. It tunes cutpoints and thresholds on val only.
 List ensembles in `scripts/ensembles.txt`. `pod_job.sh` builds them after the training runs.
 Reason: averaging seeds usually lowers variance. It costs no training, only 3 times the inference.
+
+## D-027 Review council findings (2026-10-16)
+
+Four independent reviews (clinical and study fit, ML methodology, data governance, project lead) read the docs and code. The full text is in `docs/private/council-2026-10-16.md` (not tracked).
+Findings that all reviews agree on:
+1. DDR is spent. We used it to choose the backbone, the schedule, the seeds, and the ensemble. DDR results are now optimistic, and the 10-epoch choice broke the rule in CLAUDE.md.
+2. All metrics are per image. The study counts eyes. There is no rule that joins images of one eye, and the referral output (binary head) and the severity grade can disagree for one eye.
+3. DDR and APTOS have no patient IDs. Their bootstrap intervals are too narrow, and APTOS test results can contain both eyes of one patient in different splits.
+4. The val threshold does not transfer across cameras (85% val specificity gave about 95% on DDR). Thresholds must be set again on clinic tuning data.
+5. Provenance is incomplete. Run configs have no commit or manifest hash (D-019 is not done). Every run used the set built before D-022. EyeQ labels are not pinned and stay on pod-local disk.
+6. Licences: EyeQ (CC BY-NC-SA) now trains the quality head, and RETFound is CC BY-NC. The exact EyePACS and APTOS rule text and the ODIR terms are not on file.
+7. The critical path is outside this repo: clinic data access and the macular edema (OCT) component.
+
+## D-028 Freeze the public-data DR configuration (2026-10-16)
+
+Supersedes the step 7 plan in D-008.
+The DR configuration is EfficientNet-B3, 10 epochs, ensemble of seeds 0-2, plus the quality head (D-025).
+Do not use DDR to choose anything more. Report DDR as a development result only.
+Stop: the RETFound comparison, more backbone or seed sweeps, both-eye fusion, pseudo-labels.
+Reason: D-027 findings 1 and 7. More public-data tuning does not move the study gate, and DDR cannot judge it without bias.
+
+## D-029 External test with a written plan, run once (2026-10-16)
+
+Write `docs/analysis-plan-external.md` before any IDRiD or Messidor-2 image is scored. Commit it first.
+The plan fixes: eye as the unit, the image-to-eye rule, one referral rule, the threshold and cutpoints (from val), rejected eyes counted against yield, a severe-undergrading limit, and the pass criteria.
+Run the frozen D-028 model on IDRiD (Disease Grading test split) and Messidor-2 (adjudicated grades) once. Report every result, pass or fail.
+Reason: these are the only clean public test sets left (D-027 finding 1). Messidor-2 grades are adjudicated, which is closest to the study reference standard.
+
+## D-030 Per-eye results and one referral rule (2026-10-16)
+
+Add an eye key (patient and laterality) where the source gives it. Where it does not (APTOS, DDR), treat each image as one eye and state this limit in every report.
+Eye result: the mean of the image outputs of that eye, after quality rejection of single images. An eye with no accepted image gets "no result".
+Referral rule: refer when the binary probability is above the threshold OR the severity grade is 2 or higher. Report how often the two heads disagree.
+Report eye-level yield, sensitivity, specificity, and kappa, with intervals clustered by patient.
+Reason: D-027 findings 2 and 3. The study counts eyes and needs one locked decision rule.
+
+## D-031 Provenance in every build and run (2026-10-16)
+
+Implements D-019.
+Each run writes the full git commit, the SHA-256 of the manifest it read, and the licence of each data source and weight into `config.json`.
+Pin EyeQ to a fixed commit of its repository and check its SHA-256. Store the labelled manifest on the network volume.
+Rebuild the processed set at a tagged commit before the external test, so the frozen model uses the D-022 crop.
+Reason: D-027 finding 5. The external result must trace to one commit and one data version.

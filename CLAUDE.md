@@ -32,7 +32,7 @@ This repo is the public-data DR component of a larger research study. Study cont
 - Write the test first. The test must fail before the change.
 - Use ASD-STE100 Simplified Technical English for docs, commit messages, and procedures.
 - Never write credentials to any file in this repository. Read the Kaggle token from `KAGGLE_API_TOKEN`.
-- Never use DDR to choose thresholds or epochs. Use DDR only to compare finished models (D-016).
+- Never use DDR to choose anything. DDR is spent (D-028). Report it as a development result only.
 - Never use IDRiD or Messidor-2 for any choice. Evaluate them once, on the frozen model.
 - Never commit files from `docs/private/`. They hold an unpublished study protocol.
 

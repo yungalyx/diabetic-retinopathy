@@ -13,7 +13,8 @@ Last update: 2026-10-15
 | 5. Run download and build on a pod | Done 2026-10-15 07:15 UTC at commit 2ca78e1. 57,633 images in the manifest |
 | 6. Training script (EfficientNet-B3, two heads) | Done (D-013, D-014). 97 tests |
 | 6b. Baseline training run | Done 2026-10-15 16:31 UTC, run `b3-20261015-1520-603e880`, best epoch 9 |
-| 7. RETFound experiment | Not started. Research-only weights (D-015, D-020) |
+| 7. Model comparison | Done. Frozen configuration: B3, 10 epochs, 3-seed ensemble (D-024, D-026, D-028). RETFound stopped |
+| 8. Quality head, per-eye results, external test | In progress (D-025, D-029 to D-031) |
 
 ## RunPod resources
 
@@ -28,13 +29,19 @@ The pod log is also written to `/workspace/bootstrap.log`.
 
 ## Next actions
 
-Work continues with research-only data and weights (D-020).
+Plan from the review council (D-027 to D-031).
 
-1. Alex: decide if this repo stays public. The study protocol is in `docs/private/` and is not committed.
-2. Agent: write the failure analysis report for the researcher in `docs/reports/`, with example images per group.
-3. Agent: add an image quality output (D-018). Train it on DDR grade 5 and DeepDRiD quality labels.
-4. Agent: add IDRiD and Messidor-2 as the external test (D-016), and provenance records (D-019).
-5. Agent: RETFound experiment (step 7) with a 10-epoch schedule.
+Agent:
+1. Read the quality run result (D-025).
+2. Provenance in runs and builds; pin EyeQ (D-031).
+3. Per-eye results and one referral rule (D-030).
+4. Write the external analysis plan, rebuild at a tagged commit, retrain the frozen configuration, then run IDRiD and Messidor-2 once (D-029).
+
+Alex and the researcher:
+1. Clinic data: archive audit query, export format, de-identification path.
+2. Start the macular edema (OCT) component plan.
+3. Licence direction for research-only data and weights (D-015, D-020, D-027).
+4. Clinician review of the DDR severe undergrades.
 
 ## Verified source facts (pod log, 2026-10-15)
 
