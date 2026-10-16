@@ -1,58 +1,66 @@
-import json, glob, os
+"""Print experiment results from the network volume and check HuggingFace access.
 
-for path in sorted(glob.glob("/workspace/runs/exp/*/metrics.json")):
-    name = path.split("/")[-2]
-    m = json.load(open(path))
-    print("RUN", name, "best_epoch", m.get("best_epoch"), "threshold", m.get("threshold"))
-    for r in m["rows"]:
-        if r["split"] in ("test", "holdout") and r["source"] in ("all", "ddr"):
-            keys = [
-                "split",
-                "source",
-                "auc",
-                "sens_op",
-                "spec_op",
-                "sens_op_lo",
-                "qwk_tuned",
-                "qwk_tuned_lo",
-                "sens_vtdr_op",
-                "severe_undergraded",
-                "severe_undergraded_rate",
-                "sens_at_spec90",
-            ]
-            print("ROW", name, {k: r.get(k) for k in keys})
-    h = "/workspace/runs/exp/%s/history.jsonl" % name
-    if os.path.exists(h):
-        for line in open(h):
-            d = json.loads(line)
-            print(
-                "HIST",
-                name,
-                d["epoch"],
-                round(d["val_auc"], 4),
-                round(d["val_qwk"], 4),
-                d["seconds"],
-            )
-from huggingface_hub import HfApi
+Run on a CPU pod with the volume at /workspace and HF_TOKEN set from the hf_token secret.
+"""
 
-api = HfApi(token=os.environ.get("HF_TOKEN"))
-try:
-    print("WHOAMI", api.whoami()["name"])
-except Exception as e:
-    print("WHOAMI_ERR", type(e).__name__, str(e)[:200])
-for repo in ["YukunZhou/RETFound_mae_natureCFP", "YukunZhou/RETFound_dinov2_meh"]:
+import json
+import os
+from pathlib import Path
+
+from huggingface_hub import HfApi, hf_hub_download
+
+RUNS = Path("/workspace/runs/exp")
+REPOS = ("YukunZhou/RETFound_mae_natureCFP", "YukunZhou/RETFound_dinov2_meh")
+KEYS = (
+    "split",
+    "source",
+    "auc",
+    "sens_op",
+    "spec_op",
+    "sens_op_lo",
+    "qwk_tuned",
+    "qwk_tuned_lo",
+    "sens_vtdr_op",
+    "severe_undergraded",
+    "severe_undergraded_rate",
+    "sens_at_spec90",
+)
+
+
+def print_runs() -> None:
+    for path in sorted(RUNS.glob("*/metrics.json")):
+        name = path.parent.name
+        metrics = json.loads(path.read_text())
+        print("RUN", name, "best_epoch", metrics.get("best_epoch"), metrics.get("threshold"))
+        for row in metrics["rows"]:
+            if row["split"] in ("test", "holdout") and row["source"] in ("all", "ddr"):
+                print("ROW", name, {k: row.get(k) for k in KEYS})
+        history = path.parent / "history.jsonl"
+        if history.exists():
+            for line in history.read_text().splitlines():
+                d = json.loads(line)
+                print("HIST", name, d["epoch"], round(d["val_auc"], 4), round(d["val_qwk"], 4))
+
+
+def check_hf() -> None:
+    token = os.environ.get("HF_TOKEN")
+    api = HfApi(token=token)
     try:
-        files = [
-            (f.path, f.size) for f in api.list_repo_tree(repo, recursive=True) if hasattr(f, "size")
-        ]
-        print("FILES", repo, files)
-        from huggingface_hub import hf_hub_download
+        print("WHOAMI", api.whoami()["name"])
+    except Exception as error:
+        print("WHOAMI_ERR", type(error).__name__, str(error)[:200])
+    for repo in REPOS:
+        try:
+            files = [(f.path, getattr(f, "size", None)) for f in api.list_repo_tree(repo)]
+            print("FILES", repo, files)
+            weights = [p for p, _ in files if p.endswith((".pth", ".bin", ".safetensors"))]
+            local = hf_hub_download(repo, weights[0], token=token, cache_dir="/workspace/.hf-cache")
+            print("DOWNLOAD_OK", repo, weights[0], Path(local).stat().st_size)
+        except Exception as error:
+            print("ACCESS_ERR", repo, type(error).__name__, str(error)[:300])
 
-        name = [p for p, _ in files if p.endswith((".pth", ".bin", ".safetensors"))][0]
-        local = hf_hub_download(
-            repo, name, token=os.environ.get("HF_TOKEN"), cache_dir="/workspace/.hf-cache"
-        )
-        print("DOWNLOAD_OK", repo, name, os.path.getsize(local))
-    except Exception as e:
-        print("ACCESS_ERR", repo, type(e).__name__, str(e)[:300])
-print("PROBE_DONE")
+
+if __name__ == "__main__":
+    print_runs()
+    check_hf()
+    print("PROBE_DONE")
