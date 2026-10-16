@@ -199,6 +199,11 @@ def test_training_writes_checkpoint_history_predictions_and_metrics(tmp_path: Pa
     assert len(metrics["cutpoints"]) == 4
     assert 0.0 <= metrics["threshold"] <= 1.0
     assert "patient_id" in predictions.columns
+    saved = json.loads((run / "config.json").read_text())
+    from retina_dr.provenance import file_sha256
+
+    assert saved["provenance"]["manifest_sha256"] == file_sha256(data / "manifest.parquet")
+    assert saved["provenance"]["weights_licence"]
     assert predictions["reject_prob"].is_between(0.0, 1.0).all()
     assert 0.0 <= metrics["quality_threshold"] <= 1.0
     holdout = next(r for r in metrics["rows"] if r["split"] == "holdout")
@@ -285,15 +290,65 @@ def test_quality_threshold_uses_youden_when_the_yield_is_already_high() -> None:
     assert 0.0 <= threshold < 0.95
 
 
-def test_report_gives_yield_and_rejection_by_disease_status() -> None:
-    frame = _quality_frame([0.0, 0.9, 0.0, 0.0], [0, 2, None, 0]).with_columns(
-        pl.lit("test").alias("split")
+def test_report_rejects_only_images_that_would_be_called_not_referable() -> None:
+    # Rule B (D-032): a referred image is never rejected, whatever its quality.
+    frame = pl.DataFrame(
+        {
+            "split": ["test"] * 4,
+            "source": ["eyepacs"] * 4,
+            "binary_label": [1, 1, 0, 0],
+            "grade": [4, 3, 0, 0],
+            "quality": [2, 2, 2, 0],
+            "prob": [0.9, 0.1, 0.1, 0.1],
+            "severity": [4.0, 0.0, 0.0, 0.0],
+            "reject_prob": [0.9, 0.9, 0.9, 0.1],
+        },
+        schema_overrides={"quality": pl.Int8},
     )
     row = evaluate_predictions(
         frame, (0.5, 1.5, 2.5, 3.5), threshold=0.5, quality_threshold=0.5, n_resamples=0
     )[0]
-    assert row["yield"] == 0.75
+    assert row["yield"] == 0.5
     assert row["reject_rate_pos"] == 0.5
-    assert row["reject_rate_neg"] == 0.0
-    assert row["reject_recall"] == 1.0
-    assert row["accepted_images"] == 3
+    assert row["reject_rate_neg"] == 0.5
+    assert row["reject_recall"] == pytest.approx(2 / 3, abs=1e-4)
+    assert row["accepted_images"] == 2
+    assert row["sens_op_accepted"] == 1.0
+
+
+def test_loss_without_binary_weight_ignores_the_binary_term() -> None:
+    parts = model_loss(
+        torch.zeros(2),
+        torch.ones(2),
+        torch.zeros(2),
+        torch.tensor([0.0, 1.0]),
+        torch.tensor([0.0, 2.0]),
+        torch.zeros(2),
+        torch.tensor([0.0, 1.0]),
+        torch.ones(2),
+        severity_weight=0.0,
+        binary_weight=0.0,
+    )
+    assert parts.total.item() == pytest.approx(parts.quality.item())
+
+
+def test_quality_task_trains_only_on_rows_with_a_quality_label(tmp_path: Path) -> None:
+    data = _processed_dir(tmp_path / "data")
+    config = TrainConfig(
+        data_dir=data,
+        run_dir=tmp_path / "run",
+        model=TINY_MODEL,
+        pretrained=False,
+        image_size=32,
+        epochs=1,
+        batch_size=4,
+        workers=0,
+        log_every=1,
+        device="cpu",
+        task="quality",
+        tta=False,
+    )
+    run = train(config)
+    record = json.loads((run / "history.jsonl").read_text().splitlines()[0])
+    assert record["train_rows"] == 12
+    assert record["val_score"] == record["val_quality_auc"]

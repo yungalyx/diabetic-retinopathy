@@ -56,13 +56,23 @@ def _share(mask: NDArray[np.bool_], within: NDArray[np.bool_]) -> float:
     return _round(float(mask[within].mean())) if within.any() else _NAN
 
 
+def rejected_rows(
+    frame: pl.DataFrame, threshold: float, reject_threshold: float
+) -> NDArray[np.bool_]:
+    """Findings-first rule (D-032): reject a low-quality image only when it is not referred."""
+    low_quality = frame["reject_prob"].to_numpy().astype(np.float64) > reject_threshold
+    referred = frame["prob"].to_numpy().astype(np.float64) > threshold
+    rejected: NDArray[np.bool_] = low_quality & ~referred
+    return rejected
+
+
 def _quality_metrics(
     group: pl.DataFrame, threshold: float, reject_threshold: float
 ) -> dict[str, float | int]:
     """Yield, rejection by disease status, quality-head recall, and grading on accepted rows."""
     y = group["binary_label"].to_numpy().astype(np.int64)
     prob = group["prob"].to_numpy().astype(np.float64)
-    rejected = group["reject_prob"].to_numpy().astype(np.float64) > reject_threshold
+    rejected = rejected_rows(group, threshold, reject_threshold)
     quality = group["quality"].fill_null(-1).to_numpy().astype(np.int64)
     accepted = ~rejected
     sens, spec = rates_at_threshold(y[accepted], prob[accepted], threshold)
@@ -136,7 +146,7 @@ def _metrics(
     )
     if reject_threshold is not None and "reject_prob" in group.columns:
         row.update(_quality_metrics(group, threshold, reject_threshold))
-        rejected = group["reject_prob"].to_numpy() > reject_threshold
+        rejected = rejected_rows(group, threshold, reject_threshold)
         row["severe_undergraded_rejected"] = int((severe & rejected).sum())
 
     statistics: dict[str, Callable[[NDArray[np.int64]], float]] = {
@@ -252,20 +262,32 @@ _MEAN_COLUMNS: Final = ("logit", "severity", "reject_prob")
 
 
 def ensemble_runs(
-    run_dirs: list[Path], out_dir: Path, n_resamples: int = DEFAULT_RESAMPLES
+    run_dirs: list[Path],
+    out_dir: Path,
+    n_resamples: int = DEFAULT_RESAMPLES,
+    quality_run: Path | None = None,
 ) -> tuple[float, list[MetricRow]]:
     """Average the predictions of finished runs, then tune and evaluate as one model (D-026).
 
     Averages the binary logit, the severity value, and reject_prob when every run has it.
+    With `quality_run`, reject_prob comes from that run only (D-033).
     Tunes cutpoints and thresholds on val only. Writes predictions.parquet and metrics.json.
     """
     frames = [pl.read_parquet(d / "predictions.parquet") for d in run_dirs]
     keys = [c for c in _KEY_COLUMNS if all(c in f.columns for f in frames)]
     means = [c for c in _MEAN_COLUMNS if all(c in f.columns for f in frames)]
+    if quality_run is not None:
+        means = [c for c in means if c != "reject_prob"]
     stacked = pl.concat([f.select(*keys, *means) for f in frames], how="vertical_relaxed")
     averaged = stacked.group_by(keys, maintain_order=True).agg(pl.col(means).mean())
     order = frames[0].select("path").with_row_index("_order")
     predictions = averaged.join(order, on="path").sort("_order").drop("_order")
+    if quality_run is not None:
+        rejects = pl.read_parquet(quality_run / "predictions.parquet").select("path", "reject_prob")
+        predictions = predictions.join(rejects, on="path", how="left", maintain_order="left")
+        if "quality" not in predictions.columns:
+            quality = pl.read_parquet(quality_run / "predictions.parquet").select("path", "quality")
+            predictions = predictions.join(quality, on="path", how="left", maintain_order="left")
     predictions = predictions.with_columns(
         pl.Series("prob", sigmoid(predictions["logit"].to_numpy().astype(np.float64)))
     )
@@ -279,12 +301,14 @@ def ensemble_runs(
         pl.Series("pred_grade", apply_cutpoints(predictions["severity"].to_numpy(), cuts))
     )
     threshold = operating_threshold(predictions)
-    reject = quality_threshold(predictions) if "reject_prob" in means else None
+    has_reject = "reject_prob" in predictions.columns
+    reject = quality_threshold(predictions) if has_reject else None
     rows = evaluate_predictions(predictions, cuts, threshold, reject, n_resamples=n_resamples)
     out_dir.mkdir(parents=True, exist_ok=True)
     predictions.write_parquet(out_dir / "predictions.parquet")
     result = {
         "members": [str(d) for d in run_dirs],
+        "quality_run": None if quality_run is None else str(quality_run),
         "cutpoints": list(cuts),
         "threshold": threshold,
         "quality_threshold": reject,

@@ -11,7 +11,11 @@ import polars as pl
 GOOD: Final = 0
 USABLE: Final = 1
 REJECT: Final = 2
-EYEQ_URL: Final = "https://raw.githubusercontent.com/HzFu/EyeQ/master/data/Label_EyeQ_train.csv"
+EYEQ_COMMIT: Final = "1dcfabb08cd31045de1a4a3ee82e48f6833697aa"
+EYEQ_URL: Final = (
+    f"https://raw.githubusercontent.com/HzFu/EyeQ/{EYEQ_COMMIT}/data/Label_EyeQ_train.csv"
+)
+EYEQ_SHA256: Final = "34f39f8923f62a13fcaeccef7e5da7ec607b45805e7736042fa274b2731b9480"
 """EyeQ train labels. They cover 12,543 EyePACS training images (CC BY-NC-SA 4.0)."""
 
 

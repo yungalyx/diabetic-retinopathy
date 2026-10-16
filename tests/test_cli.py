@@ -134,3 +134,55 @@ def test_ensemble_command_averages_runs_and_writes_metrics(tmp_path: Path) -> No
     metrics = json.loads((out / "metrics.json").read_text())
     assert metrics["members"] == runs
     assert any(r["split"] == "holdout" for r in metrics["rows"])
+
+
+def test_ensemble_takes_the_reject_probability_from_the_quality_run(tmp_path: Path) -> None:
+    import json
+
+    base = {
+        "path": ["a", "b", "c", "d"],
+        "source": ["eyepacs"] * 4,
+        "patient_id": ["1", "2", "3", "4"],
+        "split": ["val", "val", "holdout", "holdout"],
+        "binary_label": [0, 1, 0, 1],
+        "grade": [0, 3, 0, 4],
+        "quality": [0, 2, None, None],
+    }
+    dr = tmp_path / "dr"
+    dr.mkdir()
+    pl.DataFrame(
+        {**base, "logit": [-2.0, 2.0, -2.0, 2.0], "severity": [0.0, 3.0, 0.0, 4.0]},
+        schema_overrides={"quality": pl.Int8},
+    ).write_parquet(dr / "predictions.parquet")
+    quality = tmp_path / "quality"
+    quality.mkdir()
+    pl.DataFrame(
+        {
+            **base,
+            "logit": [0.0] * 4,
+            "severity": [0.0] * 4,
+            "reject_prob": [0.1, 0.9, 0.2, 0.8],
+        },
+        schema_overrides={"quality": pl.Int8},
+    ).write_parquet(quality / "predictions.parquet")
+    out = tmp_path / "ens"
+    code = main(
+        [
+            "ensemble",
+            "--run-dirs",
+            str(dr),
+            "--quality-run",
+            str(quality),
+            "--out-dir",
+            str(out),
+            "--resamples",
+            "0",
+        ]
+    )
+    assert code == 0
+    predictions = pl.read_parquet(out / "predictions.parquet")
+    assert predictions["reject_prob"].to_list() == [0.1, 0.9, 0.2, 0.8]
+    assert predictions["logit"].to_list() == [-2.0, 2.0, -2.0, 2.0]
+    metrics = json.loads((out / "metrics.json").read_text())
+    assert metrics["quality_run"] == str(quality)
+    assert metrics["quality_threshold"] is not None

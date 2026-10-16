@@ -34,16 +34,20 @@ nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader ||
 log "results so far, and HuggingFace access"
 uv run python scripts/analysis/probe_runs_and_hf.py </dev/null || log "probe failed"
 
-EYEQ="/root/eyeq_train.csv"
+EYEQ="/workspace/labels/eyeq_train.csv"
+EYEQ_URL="https://raw.githubusercontent.com/HzFu/EyeQ/1dcfabb08cd31045de1a4a3ee82e48f6833697aa/data/Label_EyeQ_train.csv"
+EYEQ_SHA256="34f39f8923f62a13fcaeccef7e5da7ec607b45805e7736042fa274b2731b9480"
+mkdir -p "$(dirname "$EYEQ")"
 if [[ ! -f "$EYEQ" ]]; then
-    log "adding EyeQ quality labels to the local manifest (D-025)"
-    if curl -fsSL "https://raw.githubusercontent.com/HzFu/EyeQ/master/data/Label_EyeQ_train.csv" -o "$EYEQ.part"; then
-        mv "$EYEQ.part" "$EYEQ"
-        uv run retina-dr add-quality --data-dir "$LOCAL" --eyeq-csv "$EYEQ" </dev/null \
-            || log "add-quality failed: runs train without quality labels"
-    else
-        log "EyeQ download failed: runs train without quality labels"
-    fi
+    curl -fsSL "$EYEQ_URL" -o "$EYEQ.part" && mv "$EYEQ.part" "$EYEQ" || log "EyeQ download failed"
+fi
+if [[ -f "$EYEQ" ]] && echo "$EYEQ_SHA256  $EYEQ" | sha256sum -c --quiet; then
+    log "adding pinned EyeQ quality labels to the local manifest (D-025, D-031)"
+    uv run retina-dr add-quality --data-dir "$LOCAL" --eyeq-csv "$EYEQ" </dev/null \
+        || log "add-quality failed: runs train without quality labels"
+    cp "$LOCAL/manifest.parquet" "/workspace/labels/manifest_with_quality.parquet"
+else
+    log "EyeQ labels missing or checksum mismatch: runs train without quality labels"
 fi
 
 EXPERIMENTS="scripts/experiments.txt"
@@ -61,7 +65,7 @@ grep -v '^\s*#' "$EXPERIMENTS" | grep -v '^\s*$' | while read -r name args; do
     # shellcheck disable=SC2086
     uv run retina-dr train --data-dir "$LOCAL" --run-dir "$run" $args --log-every 300 </dev/null \
         || { log "FAILED $name"; continue; }
-    echo "$COMMIT" > "$run/COMMIT"
+    git rev-parse HEAD > "$run/COMMIT"
     log "finished $name"
     uv run python -c "import json,sys; [print('RESULT', sys.argv[1], r) for r in json.load(open(sys.argv[2]))['rows'] if r['source']=='all']" "$name" "$run/metrics.json" </dev/null || true
 done
@@ -70,10 +74,20 @@ grep -v '^\s*#' scripts/ensembles.txt | grep -v '^\s*$' | while read -r name mem
     out="$RUNS/exp/$name"
     [[ -f "$out/metrics.json" ]] && continue
     dirs=()
-    for member in $members; do dirs+=("$RUNS/exp/$member"); done
+    extra=()
+    for member in $members; do
+        if [[ "$member" == quality=* ]]; then
+            extra=(--quality-run "$RUNS/exp/${member#quality=}")
+            [[ -f "$RUNS/exp/${member#quality=}/predictions.parquet" ]] || continue 2
+        else
+            dirs+=("$RUNS/exp/$member")
+        fi
+    done
     for dir in "${dirs[@]}"; do [[ -f "$dir/predictions.parquet" ]] || continue 2; done
     log "ensemble $name from $members"
-    uv run retina-dr ensemble --run-dirs "${dirs[@]}" --out-dir "$out" </dev/null || log "FAILED ensemble $name"
+    uv run retina-dr ensemble --run-dirs "${dirs[@]}" "${extra[@]}" --out-dir "$out" </dev/null \
+        || log "FAILED ensemble $name"
+    git rev-parse HEAD > "$out/COMMIT"
 done
 
 if [[ -n "${RUNPOD_POD_ID:-}" ]] && command -v runpodctl >/dev/null 2>&1; then

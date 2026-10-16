@@ -61,6 +61,7 @@ def _parser() -> argparse.ArgumentParser:
     tr.add_argument("--weight-decay", type=float, default=1e-5)
     tr.add_argument("--severity-weight", type=float, default=1.0)
     tr.add_argument("--quality-weight", type=float, default=1.0)
+    tr.add_argument("--task", choices=("dr", "quality"), default="dr")
     tr.add_argument("--rebalance-start", type=float, default=0.5)
     tr.add_argument("--workers", type=int, default=None, help="default: available CPUs - 1")
     tr.add_argument("--seed", type=int, default=0)
@@ -75,6 +76,7 @@ def _parser() -> argparse.ArgumentParser:
     en = commands.add_parser("ensemble", help="average finished runs and evaluate (D-026)")
     en.add_argument("--run-dirs", type=Path, nargs="+", required=True)
     en.add_argument("--out-dir", type=Path, required=True)
+    en.add_argument("--quality-run", type=Path, default=None, help="run that gives reject_prob")
     en.add_argument("--resamples", type=int, default=500)
 
     ev = commands.add_parser("evaluate", help="recompute metrics of a finished run (D-017)")
@@ -97,7 +99,8 @@ def _ensemble(args: argparse.Namespace) -> int:
     from retina_dr.train.report import ensemble_runs
 
     runs = [Path(d) for d in args.run_dirs]
-    threshold, rows = ensemble_runs(runs, Path(args.out_dir), int(args.resamples))
+    quality = None if args.quality_run is None else Path(args.quality_run)
+    threshold, rows = ensemble_runs(runs, Path(args.out_dir), int(args.resamples), quality)
     print(f"ensemble of {len(runs)} runs, threshold {threshold:.4f}")
     with pl.Config(tbl_rows=-1, tbl_cols=-1, tbl_width_chars=400):
         print(pl.DataFrame(rows))
@@ -130,6 +133,7 @@ def _train(args: argparse.Namespace) -> int:
         weight_decay=float(args.weight_decay),
         severity_weight=float(args.severity_weight),
         quality_weight=float(args.quality_weight),
+        task=str(args.task),
         rebalance_start=float(args.rebalance_start),
         workers=max(1, available_cpus() - 1) if args.workers is None else int(args.workers),
         seed=int(args.seed),

@@ -31,3 +31,11 @@ def normalization_of(backbone: nn.Module) -> Normalization:
     if not isinstance(config, dict):
         return _IMAGENET
     return (_triple(config.get("mean"), _IMAGENET[0]), _triple(config.get("std"), _IMAGENET[1]))
+
+
+def licence_of(backbone: nn.Module) -> str:
+    """Licence of the pretrained weights from the timm config, or "not recorded"."""
+    config = getattr(backbone, "pretrained_cfg", None)
+    if isinstance(config, dict) and isinstance(config.get("license"), str):
+        return str(config["license"])
+    return "not recorded"

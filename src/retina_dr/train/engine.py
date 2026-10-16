@@ -19,8 +19,9 @@ from numpy.typing import NDArray
 from torch import Tensor
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
+from retina_dr.provenance import run_provenance
 from retina_dr.quality import REJECT
-from retina_dr.train.backbone import normalization_of
+from retina_dr.train.backbone import licence_of, normalization_of
 from retina_dr.train.data import Batch, FundusDataset, eval_transform, labels_of, train_transform
 from retina_dr.train.losses import model_loss
 from retina_dr.train.metrics import (
@@ -44,6 +45,7 @@ log = logging.getLogger(__name__)
 TRAIN_SPLIT: Final = "train"
 VAL_SPLIT: Final = "val"
 EVAL_SPLITS: Final = ("val", "test", "holdout")
+TASKS: Final = ("dr", "quality")
 WARMUP_FRACTION: Final = 0.05
 
 FloatArray = NDArray[np.float64]
@@ -91,6 +93,8 @@ class TrainConfig:
     limit: int | None = None
     """Rows per split, for smoke runs. None uses every row."""
     tta: bool = True
+    task: str = "dr"
+    """"dr" trains the grading heads. "quality" trains only the quality head (D-033)."""
     log_every: int = 200
     device: str = "auto"
 
@@ -227,13 +231,24 @@ def train(config: TrainConfig) -> Path:
     _seed_everything(config.seed)
     device = _device(config.device)
     config.run_dir.mkdir(parents=True, exist_ok=True)
-    _write_json(config.run_dir / "config.json", asdict(config))
+    if config.task not in TASKS:
+        raise ValueError(f"task must be one of {TASKS}, got {config.task!r}")
+    quality_only = config.task == "quality"
     splits = load_splits(config)
+    if quality_only:
+        splits[TRAIN_SPLIT] = splits[TRAIN_SPLIT].filter(pl.col("quality").is_not_null())
     log.info("device %s, rows per split %s", device, {k: v.height for k, v in splits.items()})
 
     root = config.data_dir
     model = build_model(config.model, config.pretrained).to(device)
     norm = normalization_of(model.backbone)
+    manifest_sources = sorted({str(x) for x in pl.concat(splits.values())["source"].unique()})
+    if splits[TRAIN_SPLIT].height and "quality" in splits[TRAIN_SPLIT].columns:
+        manifest_sources.append("eyeq")
+    provenance = run_provenance(
+        config.data_dir / "manifest.parquet", manifest_sources, licence_of(model.backbone)
+    )
+    _write_json(config.run_dir / "config.json", {**asdict(config), "provenance": provenance})
     log.info("model %s, input normalization mean %s std %s", config.model, norm[0], norm[1])
     train_set = FundusDataset(splits[TRAIN_SPLIT], root, train_transform(config.image_size, norm))
     labels = labels_of(splits[TRAIN_SPLIT])
@@ -290,8 +305,9 @@ def train(config: TrainConfig) -> Path:
                 has_grade,
                 reject,
                 has_quality,
-                config.severity_weight,
+                0.0 if quality_only else config.severity_weight,
                 config.quality_weight,
+                0.0 if quality_only else 1.0,
             )
             optimizer.zero_grad(set_to_none=True)
             torch.autograd.backward(parts.total)
@@ -316,9 +332,11 @@ def train(config: TrainConfig) -> Path:
                 )
         preds = predict(model, eval_loaders[VAL_SPLIT], device, tta=False)
         auc, qwk, cuts = _validation_score(splits[VAL_SPLIT], preds)
-        score = float(np.nanmean([auc, qwk]))
+        quality_auc = _quality_auc(splits[VAL_SPLIT], preds)
+        score = quality_auc if quality_only else float(np.nanmean([auc, qwk]))
         record = {
             "epoch": epoch,
+            "train_rows": splits[TRAIN_SPLIT].height,
             "alpha": round(alpha, 4),
             "lr": scheduler.get_last_lr()[0],
             "train_loss": sums[0] / max(steps, 1),
@@ -326,7 +344,7 @@ def train(config: TrainConfig) -> Path:
             "train_huber": sums[2] / max(steps, 1),
             "train_quality": sums[3] / max(steps, 1),
             "val_auc": auc,
-            "val_quality_auc": _quality_auc(splits[VAL_SPLIT], preds),
+            "val_quality_auc": quality_auc,
             "val_qwk": qwk,
             "val_score": score,
             "seconds": round(time.perf_counter() - started, 1),

@@ -33,6 +33,7 @@ def model_loss(
     has_quality: Tensor,
     severity_weight: float = 1.0,
     quality_weight: float = 1.0,
+    binary_weight: float = 1.0,
 ) -> LossParts:
     """Masked loss (D-002, D-025). All targets and masks are float tensors of one row each."""
     gradable = 1.0 - reject * has_quality
@@ -46,5 +47,5 @@ def model_loss(
         quality_logit.float(), reject, reduction="none"
     )
     quality = _masked_mean(quality_rows, has_quality)
-    total = bce + severity_weight * huber + quality_weight * quality
+    total = binary_weight * bce + severity_weight * huber + quality_weight * quality
     return LossParts(total, bce, huber, quality)
