@@ -22,8 +22,10 @@ def _idrid(root: Path) -> Path:
         "Image name,Retinopathy grade,Risk of macular edema \nIDRiD_001,0,0\nIDRiD_002,3,2\n"
     )
     (truth / "a. IDRiD_Disease Grading_Training Labels.csv").write_text(
-        "Image name,Retinopathy grade,Risk of macular edema \nIDRiD_101,4,2\n"
+        "Image name,Retinopathy grade,Risk of macular edema \nIDRiD_001,4,2\n"
     )
+    # Other IDRiD parts reuse the same image names for different files.
+    write_fundus(root / "A. Segmentation" / "1. Original Images" / "IDRiD_001.jpg", seed=9)
     return root
 
 

@@ -44,11 +44,14 @@ def _csv_with_name(root: Path, fragment: str) -> Path:
 
 def read_idrid(root: Path) -> list[ExternalRecord]:
     """IDRiD Disease Grading, test split only (103 images). No patient or eye link."""
-    labels = read_csv_checked(
-        _csv_with_name(root, "Disease Grading_Testing Labels"),
-        ["Image name", "Retinopathy grade"],
-    )
-    index = index_images(root)
+    label_file = _csv_with_name(root, "Disease Grading_Testing Labels")
+    labels = read_csv_checked(label_file, ["Image name", "Retinopathy grade"])
+    # Other IDRiD parts and the training split reuse image names: index the test images only.
+    grading = label_file.parent.parent
+    folders = sorted(d for d in grading.rglob("*") if d.is_dir() and "testing" in d.name.lower())
+    if not folders:
+        raise FileNotFoundError(f"no testing image folder under {grading}")
+    index = index_images(folders[0])
     records: list[ExternalRecord] = []
     for name, grade in labels.select("Image name", "Retinopathy grade").iter_rows():
         stem = Path(str(name)).stem
