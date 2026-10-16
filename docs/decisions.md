@@ -250,3 +250,13 @@ Refer when the referral probability is above the val threshold. A referred eye g
 Report `head_disagreement` (how often the two heads disagree before this rule), `qwk_system`, and `severe_undergraded_system` from the system grades.
 In every current public source, one image is one eye (EyePACS and ODIR have one image per eye; APTOS, DDR, IDRiD, and Messidor-2 have no eye link). `to_eye_level` averages the images of one eye for later clinic data.
 Reason: the "OR" rule changes the operating point that val fixed. This rule keeps the val threshold and gives one consistent output per eye.
+
+## D-035 External sets, frozen model record, and no rebuild (2026-10-16)
+
+External sets for the one-time test (D-029):
+- IDRiD Disease Grading test split (103 images). Kaggle copy `aaryapatel98/indian-diabetic-retinopathy-image-dataset`. CC BY 4.0 permits copies.
+- DeepDRiD regular fundus, Online-Challenge 1 and 2 evaluation set (400 images, 200 eyes, 100 patients), from the official GitHub repository. CC BY-SA 4.0, used for evaluation only. It also has image-quality labels ("Overall quality": 1 good, 0 not acceptable), so it is the external test of the quality model.
+- Messidor-2: images only from ADCIS (no copies: ADCIS forbids redistribution), grades from the Google Brain Kaggle release. Waits for ADCIS access. It runs later with the same plan.
+Supersedes the rebuild in D-031. Do not rebuild or retrain before the external test. The frozen model is the D-028 ensemble `b3-e10-ens3-q`, recorded in `runs/exp/b3-e10-ens3-q/frozen_model.json` (member commits, best.pt SHA-256, manifest SHA-256, thresholds, cutpoints).
+Reason: the D-022 crop fix changes 25 of 57,952 training images and had no measurable effect. A retrain makes a new model that DDR cannot judge without bias. External images use the fixed crop, so their backgrounds match the other training images.
+The analysis plan is in `docs/private/analysis-plan-external.md` because it uses unpublished study criteria. Its SHA-256 is committed in `docs/analysis-plan-external.sha256` before any external image is scored.

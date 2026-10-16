@@ -1,0 +1,4 @@
+38661880d6d3d874e387c48879883cf28250d3ef3d6d1f6dcf1b330f16b38fca  docs/private/analysis-plan-external.md
+
+SHA-256 of the external analysis plan (D-029, D-035). Committed before any external image is scored.
+The plan is private because it uses unpublished study criteria. Check it with: sha256sum docs/private/analysis-plan-external.md
