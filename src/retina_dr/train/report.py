@@ -10,6 +10,7 @@ import numpy as np
 import polars as pl
 from numpy.typing import NDArray
 
+from retina_dr.quality import REJECT
 from retina_dr.train.metrics import (
     DEFAULT_CUTPOINTS,
     apply_cutpoints,
@@ -19,6 +20,7 @@ from retina_dr.train.metrics import (
     roc_auc,
     sensitivity_at_specificity,
     threshold_at_specificity,
+    youden_threshold,
 )
 
 SPECIFICITIES: Final = (0.90, 0.95)
@@ -28,6 +30,8 @@ VTDR_GRADE: Final = 3
 """Vision-threatening DR: grade 3 or higher."""
 SEVERE_UNDERGRADE_MAX: Final = 1
 """A grade 3-4 image predicted at this grade or lower counts as severe undergrading."""
+YIELD_TARGET: Final = 0.90
+"""Share of val images that must get a result. The quality threshold respects it (D-025)."""
 DEFAULT_RESAMPLES: Final = 500
 ALL_SOURCES: Final = "all"
 
@@ -47,8 +51,46 @@ def _clusters(group: pl.DataFrame) -> NDArray[np.str_]:
     return np.arange(group.height).astype(np.str_)
 
 
+def _share(mask: NDArray[np.bool_], within: NDArray[np.bool_]) -> float:
+    return _round(float(mask[within].mean())) if within.any() else _NAN
+
+
+def _quality_metrics(
+    group: pl.DataFrame, threshold: float, reject_threshold: float
+) -> dict[str, float | int]:
+    """Yield, rejection by disease status, quality-head recall, and grading on accepted rows."""
+    y = group["binary_label"].to_numpy().astype(np.int64)
+    prob = group["prob"].to_numpy().astype(np.float64)
+    rejected = group["reject_prob"].to_numpy().astype(np.float64) > reject_threshold
+    quality = group["quality"].fill_null(-1).to_numpy().astype(np.int64)
+    accepted = ~rejected
+    sens, spec = rates_at_threshold(y[accepted], prob[accepted], threshold)
+    labelled = quality >= 0
+    return {
+        "yield": _round(float(accepted.mean())) if group.height else _NAN,
+        "reject_rate_pos": _share(rejected, y == 1),
+        "reject_rate_neg": _share(rejected, y == 0),
+        "quality_auc": _round(
+            roc_auc(
+                (quality[labelled] == REJECT).astype(np.int64),
+                group["reject_prob"].to_numpy()[labelled],
+            )
+        ),
+        "reject_recall": _share(rejected, quality == REJECT),
+        "accepted_images": int(accepted.sum()),
+        "auc_accepted": _round(roc_auc(y[accepted], prob[accepted])),
+        "sens_op_accepted": _round(sens),
+        "spec_op_accepted": _round(spec),
+    }
+
+
 def _metrics(
-    group: pl.DataFrame, cuts: tuple[float, ...], threshold: float, n_resamples: int, seed: int
+    group: pl.DataFrame,
+    cuts: tuple[float, ...],
+    threshold: float,
+    reject_threshold: float | None,
+    n_resamples: int,
+    seed: int,
 ) -> dict[str, float | int]:
     y = group["binary_label"].to_numpy().astype(np.int64)
     prob = group["prob"].to_numpy().astype(np.float64)
@@ -91,6 +133,10 @@ def _metrics(
     row["severe_undergraded_rate"] = (
         _round(float(severe.sum() / vtdr.sum())) if vtdr.any() else _NAN
     )
+    if reject_threshold is not None and "reject_prob" in group.columns:
+        row.update(_quality_metrics(group, threshold, reject_threshold))
+        rejected = group["reject_prob"].to_numpy() > reject_threshold
+        row["severe_undergraded_rejected"] = int((severe & rejected).sum())
 
     statistics: dict[str, Callable[[NDArray[np.int64]], float]] = {
         "auc": lambda idx: roc_auc(y[idx], prob[idx]),
@@ -113,10 +159,34 @@ def operating_threshold(predictions: pl.DataFrame, split: str = "val") -> float:
     )
 
 
+def quality_threshold(predictions: pl.DataFrame, split: str = "val") -> float:
+    """Reject threshold on the quality head, chosen on val only (D-025).
+
+    Start from the Youden-optimal threshold on val rows with an EyeQ label. Raise it when
+    needed, so that at least YIELD_TARGET of all val images get a result.
+    """
+    if "reject_prob" not in predictions.columns:
+        return 1.0
+    val = predictions.filter(pl.col("split") == split)
+    if val.height == 0:
+        return 1.0
+    probs = np.sort(val["reject_prob"].to_numpy().astype(np.float64))
+    # Lowest threshold that rejects at most (1 - YIELD_TARGET) of val: rows above it are rejected.
+    allowed = math.floor((1.0 - YIELD_TARGET) * len(probs) + 1e-9)
+    floor = float(probs[len(probs) - allowed - 1])
+    labelled = val.filter(pl.col("quality").is_not_null())
+    youden = youden_threshold(
+        (labelled["quality"].to_numpy() == REJECT).astype(np.int64),
+        labelled["reject_prob"].to_numpy(),
+    )
+    return floor if math.isnan(youden) else max(youden, floor)
+
+
 def evaluate_predictions(
     predictions: pl.DataFrame,
     cuts: tuple[float, ...],
     threshold: float,
+    quality_threshold: float | None = None,
     n_resamples: int = DEFAULT_RESAMPLES,
     seed: int = 0,
 ) -> list[MetricRow]:
@@ -124,6 +194,7 @@ def evaluate_predictions(
 
     Expects columns split, source, binary_label, grade (nullable), prob, severity.
     Uses patient_id for the bootstrap when present. Sets the operating point at `threshold`.
+    With `quality_threshold` and a reject_prob column, adds the quality metrics (D-025).
     """
     rows: list[MetricRow] = []
     for split in sorted(predictions["split"].unique().to_list()):
@@ -133,7 +204,7 @@ def evaluate_predictions(
             for source in sorted(in_split["source"].unique().to_list())
         ]
         for source, group in groups:
-            metrics = _metrics(group, cuts, threshold, n_resamples, seed)
+            metrics = _metrics(group, cuts, threshold, quality_threshold, n_resamples, seed)
             rows.append({"split": split, "source": source, **metrics})
     return rows
 
@@ -153,7 +224,8 @@ def reevaluate_run(
     saved = json.loads((run_dir / "metrics.json").read_text())
     cuts = tuple(float(c) for c in saved["cutpoints"])
     threshold = operating_threshold(predictions)
-    rows = evaluate_predictions(predictions, cuts, threshold, n_resamples)
+    reject = float(saved["quality_threshold"]) if "quality_threshold" in saved else None
+    rows = evaluate_predictions(predictions, cuts, threshold, reject, n_resamples=n_resamples)
     result = {
         "cutpoints": list(cuts),
         "threshold": threshold,

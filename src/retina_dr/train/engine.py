@@ -19,9 +19,10 @@ from numpy.typing import NDArray
 from torch import Tensor
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
+from retina_dr.quality import REJECT
 from retina_dr.train.backbone import normalization_of
-from retina_dr.train.data import FundusDataset, eval_transform, labels_of, train_transform
-from retina_dr.train.losses import two_head_loss
+from retina_dr.train.data import Batch, FundusDataset, eval_transform, labels_of, train_transform
+from retina_dr.train.losses import model_loss
 from retina_dr.train.metrics import (
     DEFAULT_CUTPOINTS,
     apply_cutpoints,
@@ -29,8 +30,13 @@ from retina_dr.train.metrics import (
     roc_auc,
     tune_cutpoints,
 )
-from retina_dr.train.model import TwoHeadNet, build_model
-from retina_dr.train.report import evaluate_predictions, operating_threshold, sigmoid
+from retina_dr.train.model import DrNet, build_model
+from retina_dr.train.report import (
+    evaluate_predictions,
+    operating_threshold,
+    quality_threshold,
+    sigmoid,
+)
 from retina_dr.train.sampling import rebalance_alpha, sample_weights, strata_from_labels
 
 log = logging.getLogger(__name__)
@@ -78,6 +84,7 @@ class TrainConfig:
     lr: float = 3e-4
     weight_decay: float = 1e-5
     severity_weight: float = 1.0
+    quality_weight: float = 1.0
     rebalance_start: float = 0.5
     workers: int = 8
     seed: int = 0
@@ -92,6 +99,8 @@ class TrainConfig:
 class Predictions:
     logits: FloatArray
     severity: FloatArray
+    quality: FloatArray
+    """Logit of "reject" from the quality head (D-025)."""
 
 
 def _seed_everything(seed: int) -> None:
@@ -132,25 +141,32 @@ def dihedral_views(images: Tensor) -> Iterator[Tensor]:
 
 
 def predict(
-    model: TwoHeadNet,
-    loader: DataLoader[tuple[Tensor, Tensor, Tensor, Tensor]],
+    model: DrNet,
+    loader: DataLoader[Batch],
     device: torch.device,
     tta: bool,
 ) -> Predictions:
-    """Binary logits and severity values, averaged over dihedral views when tta is on."""
+    """All three head outputs, averaged over dihedral views when tta is on."""
     model.eval()
-    logits: list[FloatArray] = []
-    severity: list[FloatArray] = []
+    heads: tuple[list[FloatArray], list[FloatArray], list[FloatArray]] = ([], [], [])
     with torch.inference_mode(), _autocast(device):
-        for images, _, _, _ in loader:
-            batch = images.to(device, non_blocking=True)
+        for batch_rows in loader:
+            batch = batch_rows[0].to(device, non_blocking=True)
             views = list(dihedral_views(batch)) if tta else [batch]
             outputs = [model(view) for view in views]
-            logit = torch.stack([o[0].float() for o in outputs]).mean(0)
-            value = torch.stack([o[1].float() for o in outputs]).mean(0)
-            logits.append(logit.cpu().numpy().astype(np.float64))
-            severity.append(value.cpu().numpy().astype(np.float64))
-    return Predictions(np.concatenate(logits), np.concatenate(severity))
+            for index, store in enumerate(heads):
+                mean = torch.stack([o[index].float() for o in outputs]).mean(0)
+                store.append(mean.cpu().numpy().astype(np.float64))
+    return Predictions(*(np.concatenate(store) for store in heads))
+
+
+def _quality_auc(frame: pl.DataFrame, preds: Predictions) -> float:
+    """Val AUC of the quality head on rows with a quality label (reject is positive)."""
+    quality = labels_of(frame).quality
+    labelled = quality >= 0
+    if not labelled.any():
+        return float("nan")
+    return roc_auc((quality[labelled] == REJECT).astype(np.int64), preds.quality[labelled])
 
 
 def _validation_score(
@@ -182,7 +198,7 @@ def _loader(
     config: TrainConfig,
     device: torch.device,
     sampler: WeightedRandomSampler | None = None,
-) -> DataLoader[tuple[Tensor, Tensor, Tensor, Tensor]]:
+) -> DataLoader[Batch]:
     return DataLoader(
         dataset,
         batch_size=config.batch_size,
@@ -198,6 +214,12 @@ def _loader(
 
 def _write_json(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload, indent=2, default=str))
+
+
+def _with_quality_column(frame: pl.DataFrame) -> pl.DataFrame:
+    if "quality" in frame.columns:
+        return frame
+    return frame.with_columns(pl.lit(None, dtype=pl.Int8).alias("quality"))
 
 
 def train(config: TrainConfig) -> Path:
@@ -250,27 +272,37 @@ def train(config: TrainConfig) -> Path:
         sampler.weights = torch.from_numpy(sample_weights(strata, alpha))
         model.train()
         started = time.perf_counter()
-        sums = np.zeros(3)
+        sums = np.zeros(4)
         steps = 0
-        for images, binary, grade, has_grade in train_loader:
+        for images, *targets in train_loader:
             batch = images.to(device, non_blocking=True)
             if device.type == "cuda":
                 batch = batch.contiguous(memory_format=torch.channels_last)
             with _autocast(device):
-                binary_logit, severity = model(batch)
-            parts = two_head_loss(
+                binary_logit, severity, quality_logit = model(batch)
+            binary, grade, has_grade, reject, has_quality = (t.to(device) for t in targets)
+            parts = model_loss(
                 binary_logit,
                 severity,
-                binary.to(device),
-                grade.to(device),
-                has_grade.to(device),
+                quality_logit,
+                binary,
+                grade,
+                has_grade,
+                reject,
+                has_quality,
                 config.severity_weight,
+                config.quality_weight,
             )
             optimizer.zero_grad(set_to_none=True)
             torch.autograd.backward(parts.total)
             optimizer.step()
             scheduler.step()
-            sums += [parts.total.item(), parts.binary.item(), parts.severity.item()]
+            sums += [
+                parts.total.item(),
+                parts.binary.item(),
+                parts.severity.item(),
+                parts.quality.item(),
+            ]
             steps += 1
             if steps % config.log_every == 0:
                 rate = steps * config.batch_size / (time.perf_counter() - started)
@@ -292,7 +324,9 @@ def train(config: TrainConfig) -> Path:
             "train_loss": sums[0] / max(steps, 1),
             "train_bce": sums[1] / max(steps, 1),
             "train_huber": sums[2] / max(steps, 1),
+            "train_quality": sums[3] / max(steps, 1),
             "val_auc": auc,
+            "val_quality_auc": _quality_auc(splits[VAL_SPLIT], preds),
             "val_qwk": qwk,
             "val_score": score,
             "seconds": round(time.perf_counter() - started, 1),
@@ -318,12 +352,22 @@ def train(config: TrainConfig) -> Path:
             continue
         preds = predict(model, eval_loaders[split], device, tta=config.tta)
         frames.append(
-            splits[split]
-            .select("path", "source", "image_id", "patient_id", "split", "binary_label", "grade")
+            _with_quality_column(splits[split])
+            .select(
+                "path",
+                "source",
+                "image_id",
+                "patient_id",
+                "split",
+                "binary_label",
+                "grade",
+                "quality",
+            )
             .with_columns(
                 pl.Series("logit", preds.logits),
                 pl.Series("prob", sigmoid(preds.logits)),
                 pl.Series("severity", preds.severity),
+                pl.Series("reject_prob", sigmoid(preds.quality)),
             )
         )
     predictions = pl.concat(frames)
@@ -338,13 +382,15 @@ def train(config: TrainConfig) -> Path:
     )
     predictions.write_parquet(config.run_dir / "predictions.parquet")
     threshold = operating_threshold(predictions)
-    rows = evaluate_predictions(predictions, cuts, threshold)
+    reject_threshold = quality_threshold(predictions)
+    rows = evaluate_predictions(predictions, cuts, threshold, reject_threshold)
     _write_json(
         config.run_dir / "metrics.json",
         {
             "best_epoch": checkpoint["epoch"],
             "cutpoints": cuts,
             "threshold": threshold,
+            "quality_threshold": reject_threshold,
             "rows": rows,
         },
     )

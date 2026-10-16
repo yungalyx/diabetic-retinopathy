@@ -136,3 +136,19 @@ def test_cluster_bootstrap_ci_resamples_whole_clusters() -> None:
     )
     assert low == 0.0
     assert high == 1.0
+
+
+def test_youden_threshold_separates_two_clean_classes() -> None:
+    from retina_dr.train.metrics import youden_threshold
+
+    y = np.array([0, 0, 1, 1])
+    s = np.array([0.1, 0.2, 0.8, 0.9])
+    threshold = youden_threshold(y, s)
+    assert threshold == 0.2
+    assert ((s > threshold) == (y == 1)).all()
+
+
+def test_youden_threshold_is_nan_for_one_class() -> None:
+    from retina_dr.train.metrics import youden_threshold
+
+    assert math.isnan(youden_threshold(np.array([1, 1]), np.array([0.2, 0.3])))

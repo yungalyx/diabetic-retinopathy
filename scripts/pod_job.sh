@@ -31,6 +31,18 @@ fi
 log "local data: $(du -sh "$LOCAL" | cut -f1)"
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader || true
 
+EYEQ="/root/eyeq_train.csv"
+if [[ ! -f "$EYEQ" ]]; then
+    log "adding EyeQ quality labels to the local manifest (D-025)"
+    if curl -fsSL "https://raw.githubusercontent.com/HzFu/EyeQ/master/data/Label_EyeQ_train.csv" -o "$EYEQ.part"; then
+        mv "$EYEQ.part" "$EYEQ"
+        uv run retina-dr add-quality --data-dir "$LOCAL" --eyeq-csv "$EYEQ" </dev/null \
+            || log "add-quality failed: runs train without quality labels"
+    else
+        log "EyeQ download failed: runs train without quality labels"
+    fi
+fi
+
 EXPERIMENTS="scripts/experiments.txt"
 grep -v '^\s*#' "$EXPERIMENTS" | grep -v '^\s*$' | while read -r name args; do
     run="$RUNS/exp/$name"

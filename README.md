@@ -101,3 +101,8 @@ It stops the pod when the full run finishes.
 Run `uv run retina-dr evaluate --run-dir runs/<name> --data-dir data/processed`.
 The command reads `predictions.parquet` and the cutpoints in `metrics.json`. It writes `metrics_ci.json`.
 It adds the operating point, vision-threatening DR sensitivity, severe undergrading, and patient-level 95% intervals. See D-017 and D-021.
+
+## Quality labels
+
+Run `uv run retina-dr add-quality --data-dir data/processed --eyeq-csv <Label_EyeQ_train.csv>` to add the EyeQ quality column to the manifest (D-025).
+The training then adds a quality head and does not train the grading heads on EyeQ Reject images.

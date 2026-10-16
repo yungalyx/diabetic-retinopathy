@@ -7,3 +7,5 @@ convnexts-e10 --model convnext_small.fb_in22k_ft_in1k_384 --epochs 10 --batch-si
 # Seed check for the best backbone (D-024).
 b3-e10-s1 --model efficientnet_b3 --epochs 10 --seed 1
 b3-e10-s2 --model efficientnet_b3 --epochs 10 --seed 2
+# Quality head on EyeQ labels, reject rows masked from grading losses (D-025).
+b3-e10-q --model efficientnet_b3 --epochs 10

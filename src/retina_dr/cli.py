@@ -14,6 +14,7 @@ from retina_dr.download import download_sources
 from retina_dr.labels import DEFAULT_BINARY_CUTOFF
 from retina_dr.pipeline import BuildConfig, SourceReadError, build, summarize
 from retina_dr.preprocess import DEFAULT_SIZE
+from retina_dr.quality import attach_quality, read_eyeq
 from retina_dr.records import SOURCES, Source
 from retina_dr.split import SplitConfig
 
@@ -59,6 +60,7 @@ def _parser() -> argparse.ArgumentParser:
     tr.add_argument("--lr", type=float, default=3e-4)
     tr.add_argument("--weight-decay", type=float, default=1e-5)
     tr.add_argument("--severity-weight", type=float, default=1.0)
+    tr.add_argument("--quality-weight", type=float, default=1.0)
     tr.add_argument("--rebalance-start", type=float, default=0.5)
     tr.add_argument("--workers", type=int, default=None, help="default: available CPUs - 1")
     tr.add_argument("--seed", type=int, default=0)
@@ -66,11 +68,24 @@ def _parser() -> argparse.ArgumentParser:
     tr.add_argument("--no-tta", action="store_true")
     tr.add_argument("--log-every", type=int, default=200)
     tr.add_argument("--device", default="auto")
+    aq = commands.add_parser("add-quality", help="add EyeQ quality labels to the manifest")
+    aq.add_argument("--data-dir", type=Path, default=Path("data/processed"))
+    aq.add_argument("--eyeq-csv", type=Path, required=True)
+
     ev = commands.add_parser("evaluate", help="recompute metrics of a finished run (D-017)")
     ev.add_argument("--run-dir", type=Path, required=True)
     ev.add_argument("--data-dir", type=Path, default=Path("data/processed"))
     ev.add_argument("--resamples", type=int, default=500)
     return parser
+
+
+def _add_quality(args: argparse.Namespace) -> int:
+    path = Path(args.data_dir) / "manifest.parquet"
+    manifest = attach_quality(pl.read_parquet(path), read_eyeq(Path(args.eyeq_csv)))
+    manifest.write_parquet(path)
+    counts = manifest.group_by("quality").len().sort("quality")
+    print(f"quality labels added to {path}: {dict(counts.iter_rows())}")
+    return 0
 
 
 def _evaluate(args: argparse.Namespace) -> int:
@@ -98,6 +113,7 @@ def _train(args: argparse.Namespace) -> int:
         lr=float(args.lr),
         weight_decay=float(args.weight_decay),
         severity_weight=float(args.severity_weight),
+        quality_weight=float(args.quality_weight),
         rebalance_start=float(args.rebalance_start),
         workers=max(1, available_cpus() - 1) if args.workers is None else int(args.workers),
         seed=int(args.seed),
@@ -115,6 +131,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.command == "train":
         return _train(args)
+    if args.command == "add-quality":
+        return _add_quality(args)
     if args.command == "evaluate":
         return _evaluate(args)
     sources = parse_sources(str(args.sources))

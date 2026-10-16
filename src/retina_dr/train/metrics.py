@@ -80,6 +80,22 @@ def rates_at_threshold(
     return sens, spec
 
 
+def youden_threshold(y_true: ArrayLike, score: ArrayLike) -> float:
+    """Score threshold with the highest sensitivity + specificity - 1 (positive: score above).
+
+    NaN when one class is missing.
+    """
+    y = np.asarray(y_true, dtype=np.int64)
+    s = np.asarray(score, dtype=np.float64)
+    positives, negatives = np.sort(s[y == 1]), np.sort(s[y == 0])
+    if len(positives) == 0 or len(negatives) == 0:
+        return float("nan")
+    candidates = np.unique(s)
+    tpr = 1.0 - np.searchsorted(positives, candidates, side="right") / len(positives)
+    fpr = 1.0 - np.searchsorted(negatives, candidates, side="right") / len(negatives)
+    return float(candidates[int(np.argmax(tpr - fpr))])
+
+
 def sensitivity_at_specificity(y_true: ArrayLike, score: ArrayLike, specificity: float) -> float:
     """Share of positives above the score that keeps at least `specificity` of negatives below."""
     y = np.asarray(y_true, dtype=np.int64)

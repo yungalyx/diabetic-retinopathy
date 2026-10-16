@@ -161,3 +161,14 @@ Result of D-023 on the DDR holdout: B3 AUC 0.969, B5 0.963, ConvNeXt-Small 0.947
 The larger backbones do not improve DDR results and train 1.2 to 2 times slower.
 Train B3 with seeds 1 and 2 before the choice is final. The baseline (15 epochs) gave DDR AUC 0.914, so the run-to-run spread can be large.
 Reason: D-008 requires 2-3 seeds per model choice.
+
+## D-025 Image quality head trained on EyeQ labels (2026-10-16)
+
+Add a third head that gives the probability that an image cannot be graded ("reject").
+Train it on the EyeQ quality labels (Good, Usable, Reject). EyeQ covers 12,543 EyePACS images in our manifest. The labels are CC BY-NC-SA 4.0 (research-only, as D-015).
+Do not train the grading heads on EyeQ Reject images. A grade read from an ungradable image is not reliable.
+Set the reject threshold on val only: the Youden threshold on EyeQ-labelled rows, raised when needed so that at least 90% of val images get a result. Apply it unchanged to test and DDR.
+Report yield, rejection rate in positive and negative eyes, reject recall on EyeQ rows, grading metrics on accepted images, and the number of severe undergrades that the quality head rejects.
+Reason: the DDR failure analysis showed that the model calls images with a hidden retina grade 0. The study protocol requires 90% DR yield and limits on acceptance of inadequate images.
+The quality head learns only from human quality labels. It cannot learn to reject hard disease cases to improve the grading loss.
+The DDR Kaggle mirror has no ungradable images (12,522 of 13,673), so DDR cannot test reject recall. DeepDRiD quality labels can do this later.

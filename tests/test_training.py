@@ -1,5 +1,6 @@
 import json
 import math
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
@@ -9,7 +10,7 @@ import torch
 
 from retina_dr.train.data import FundusDataset, eval_transform, train_transform
 from retina_dr.train.engine import TrainConfig, dihedral_views, train
-from retina_dr.train.losses import two_head_loss
+from retina_dr.train.losses import LossParts, model_loss
 from retina_dr.train.model import build_model
 from retina_dr.train.report import evaluate_predictions
 from tests.conftest import write_fundus
@@ -38,35 +39,65 @@ def _processed_dir(root: Path) -> Path:
                     "binary_label": int(grade >= 2),
                     "split": split,
                     "dup_group": index,
+                    "quality": None if source == "odir" else index % 3,
                 }
             )
             index += 1
-    pl.DataFrame(rows, schema_overrides={"grade": pl.Int8, "binary_label": pl.Int8}).write_parquet(
-        root / "manifest.parquet"
-    )
+    pl.DataFrame(
+        rows, schema_overrides={"grade": pl.Int8, "binary_label": pl.Int8, "quality": pl.Int8}
+    ).write_parquet(root / "manifest.parquet")
     return root
 
 
+def _loss(
+    binary: list[float],
+    grade: list[float],
+    has_grade: list[float],
+    reject: list[float] | None = None,
+    has_quality: list[float] | None = None,
+    severity: list[float] | None = None,
+) -> LossParts:
+    n = len(binary)
+    return model_loss(
+        torch.zeros(n),
+        torch.tensor(severity if severity is not None else [1.0] * n),
+        torch.zeros(n),
+        torch.tensor(binary),
+        torch.tensor(grade),
+        torch.tensor(has_grade),
+        torch.tensor(reject if reject is not None else [0.0] * n),
+        torch.tensor(has_quality if has_quality is not None else [0.0] * n),
+    )
+
+
 def test_severity_loss_ignores_rows_without_a_grade() -> None:
-    logit, severity = torch.zeros(3), torch.tensor([1.0, 2.0, 3.0])
-    binary, has_grade = torch.tensor([0.0, 1.0, 1.0]), torch.tensor([1.0, 1.0, 0.0])
-    a = two_head_loss(logit, severity, binary, torch.tensor([1.0, 2.0, 0.0]), has_grade)
-    b = two_head_loss(logit, severity, binary, torch.tensor([1.0, 2.0, 4.0]), has_grade)
+    a = _loss([0.0, 1.0, 1.0], [1.0, 2.0, 0.0], [1.0, 1.0, 0.0], severity=[1.0, 2.0, 3.0])
+    b = _loss([0.0, 1.0, 1.0], [1.0, 2.0, 4.0], [1.0, 1.0, 0.0], severity=[1.0, 2.0, 3.0])
     assert a.total.item() == pytest.approx(b.total.item())
     assert a.severity.item() == pytest.approx(0.0)
 
 
 def test_severity_loss_is_zero_when_no_row_has_a_grade() -> None:
-    parts = two_head_loss(
-        torch.zeros(2), torch.ones(2), torch.zeros(2), torch.full((2,), 4.0), torch.zeros(2)
-    )
-    assert parts.severity.item() == 0.0
+    assert _loss([0.0, 0.0], [4.0, 4.0], [0.0, 0.0]).severity.item() == 0.0
 
 
-def test_model_returns_one_logit_and_one_severity_per_image() -> None:
+def test_rejected_images_add_nothing_to_the_grading_losses() -> None:
+    quality = {"reject": [0.0, 1.0], "has_quality": [1.0, 1.0]}
+    a = _loss([0.0, 0.0], [1.0, 0.0], [1.0, 1.0], **quality)
+    b = _loss([0.0, 1.0], [1.0, 4.0], [1.0, 1.0], **quality)
+    assert a.binary.item() == pytest.approx(b.binary.item())
+    assert a.severity.item() == pytest.approx(b.severity.item())
+    assert a.quality.item() > 0.0
+
+
+def test_quality_loss_is_zero_without_quality_labels() -> None:
+    assert _loss([0.0, 1.0], [0.0, 2.0], [1.0, 1.0], reject=[1.0, 1.0]).quality.item() == 0.0
+
+
+def test_model_returns_a_logit_a_severity_and_a_quality_logit_per_image() -> None:
     model = build_model(TINY_MODEL, pretrained=False).eval()
-    logit, severity = model(torch.zeros(2, 3, 64, 64))
-    assert logit.shape == severity.shape == (2,)
+    logit, severity, quality = model(torch.zeros(2, 3, 64, 64))
+    assert logit.shape == severity.shape == quality.shape == (2,)
 
 
 def test_dihedral_views_are_eight_distinct_views_including_the_original() -> None:
@@ -81,13 +112,23 @@ def test_dataset_marks_rows_without_grade(tmp_path: Path) -> None:
     root = _processed_dir(tmp_path)
     frame = pl.read_parquet(root / "manifest.parquet").filter(pl.col("split") == "train")
     dataset = FundusDataset(frame, root, eval_transform(32))
-    image, _, grade, has_grade = dataset[0]
+    image, _, grade, has_grade, _, has_quality = dataset[0]
     assert image.shape == (3, 32, 32)
     assert has_grade.item() == 0.0
     assert grade.item() == 0.0
-    image, _, _, has_grade = FundusDataset(frame, root, train_transform(32))[1]
+    assert has_quality.item() == 0.0
+    image, _, _, has_grade, _, _ = FundusDataset(frame, root, train_transform(32))[1]
     assert image.shape == (3, 32, 32)
     assert has_grade.item() == 1.0
+
+
+def test_dataset_reads_quality_labels_when_the_manifest_has_them(tmp_path: Path) -> None:
+    root = _processed_dir(tmp_path)
+    frame = pl.read_parquet(root / "manifest.parquet").head(3)
+    frame = frame.with_columns(pl.Series("quality", [2, None, 0], dtype=pl.Int8))
+    dataset = FundusDataset(frame, root, eval_transform(32))
+    assert [dataset[i][4].item() for i in range(3)] == [1.0, 0.0, 0.0]
+    assert [dataset[i][5].item() for i in range(3)] == [1.0, 0.0, 1.0]
 
 
 def test_report_gives_perfect_scores_for_perfect_predictions() -> None:
@@ -158,6 +199,10 @@ def test_training_writes_checkpoint_history_predictions_and_metrics(tmp_path: Pa
     assert len(metrics["cutpoints"]) == 4
     assert 0.0 <= metrics["threshold"] <= 1.0
     assert "patient_id" in predictions.columns
+    assert predictions["reject_prob"].is_between(0.0, 1.0).all()
+    assert 0.0 <= metrics["quality_threshold"] <= 1.0
+    holdout = next(r for r in metrics["rows"] if r["split"] == "holdout")
+    assert 0.0 <= holdout["yield"] <= 1.0
     assert any(r["split"] == "holdout" for r in metrics["rows"])
 
 
@@ -202,3 +247,53 @@ def test_eval_transform_uses_the_given_normalization() -> None:
     image = Image.new("RGB", (8, 8), (255, 255, 255))
     out = eval_transform(8, ((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)))(image)
     assert torch.allclose(out, torch.ones_like(out))
+
+
+def _quality_frame(reject_prob: Sequence[float], quality: Sequence[int | None]) -> pl.DataFrame:
+    n = len(reject_prob)
+    return pl.DataFrame(
+        {
+            "split": ["val"] * n,
+            "source": ["eyepacs"] * n,
+            "binary_label": [i % 2 for i in range(n)],
+            "grade": [2 * (i % 2) for i in range(n)],
+            "quality": quality,
+            "prob": [0.9 * (i % 2) for i in range(n)],
+            "severity": [2.0 * (i % 2) for i in range(n)],
+            "reject_prob": reject_prob,
+        },
+        schema_overrides={"quality": pl.Int8},
+    )
+
+
+def test_quality_threshold_keeps_at_least_ninety_percent_of_val_images() -> None:
+    from retina_dr.train.report import quality_threshold
+
+    # Half of the labelled images are reject: Youden alone would reject half of val.
+    probs = [0.1 * i for i in range(10)]
+    frame = _quality_frame(probs, [0] * 5 + [2] * 5)
+    threshold = quality_threshold(frame)
+    assert (np.array(probs) > threshold).mean() <= 0.10
+
+
+def test_quality_threshold_uses_youden_when_the_yield_is_already_high() -> None:
+    from retina_dr.train.report import quality_threshold
+
+    probs = [0.0] * 18 + [0.95, 0.99]
+    frame = _quality_frame(probs, [0] * 18 + [2, 2])
+    threshold = quality_threshold(frame)
+    assert 0.0 <= threshold < 0.95
+
+
+def test_report_gives_yield_and_rejection_by_disease_status() -> None:
+    frame = _quality_frame([0.0, 0.9, 0.0, 0.0], [0, 2, None, 0]).with_columns(
+        pl.lit("test").alias("split")
+    )
+    row = evaluate_predictions(
+        frame, (0.5, 1.5, 2.5, 3.5), threshold=0.5, quality_threshold=0.5, n_resamples=0
+    )[0]
+    assert row["yield"] == 0.75
+    assert row["reject_rate_pos"] == 0.5
+    assert row["reject_rate_neg"] == 0.0
+    assert row["reject_recall"] == 1.0
+    assert row["accepted_images"] == 3
