@@ -89,3 +89,12 @@ Seed runs (B3, 10 epochs) on DDR:
 - Added the quality head (D-025) and `retina-dr ensemble` (D-026). 122 tests pass.
 - No RTX 4090 was free in EU-RO-1. The quality run uses an RTX PRO 4000 Blackwell pod (`ojsos1hojydwt0`, $0.57/hr).
 - Deleted the old pods `00difbrelhsfon` and `rqcktnogjy5zqf` (approved by Alex).
+
+## 2026-10-16 (afternoon): Review council, quality result, and fixes
+
+- Ran a four-lens review council. Findings and the resulting plan are D-027 to D-031.
+- Quality run `b3-e10-q`: EyePACS test quality AUC 0.992. Quality-first rejection failed on DDR (yield 82%, rejection 31% of referable against 7%). Findings-first rule fixes it (yield 92.4%, 8.3% against 7.0%) (D-032).
+- The shared quality training lowered DR results (DDR AUC 0.943). The quality model is now a separate run (D-033).
+- Added `--task quality`, quality runs in ensembles, run provenance in `config.json`, and pinned EyeQ labels (D-031). 129 tests pass.
+- RETFound: both weight files downloaded (access granted). Not used (D-028).
+- Pod `6tj7n7p9whuejm` (RTX 4090) trains `quality-b3` and builds `b3-e10-ens3-q`.
