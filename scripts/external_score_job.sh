@@ -12,7 +12,7 @@ cd /code
 log "commit $(git rev-parse HEAD)"
 if [[ -n "${PLAN_B64:-}" ]]; then
     mkdir -p /workspace/private
-    echo "$PLAN_B64" | base64 -d > /workspace/private/analysis-plan-external.md
+    echo "$PLAN_B64" | base64 -d | gunzip > /workspace/private/analysis-plan-external.md
     expected="$(cut -d' ' -f1 docs/analysis-plan-external.sha256 | head -1)"
     actual="$(sha256sum /workspace/private/analysis-plan-external.md | cut -d' ' -f1)"
     log "plan stored on the volume. expected $expected actual $actual"
