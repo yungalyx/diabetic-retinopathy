@@ -31,6 +31,9 @@ fi
 log "local data: $(du -sh "$LOCAL" | cut -f1)"
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader || true
 
+log "results so far, and HuggingFace access"
+uv run python scripts/analysis/probe_runs_and_hf.py </dev/null || log "probe failed"
+
 EYEQ="/root/eyeq_train.csv"
 if [[ ! -f "$EYEQ" ]]; then
     log "adding EyeQ quality labels to the local manifest (D-025)"
