@@ -139,3 +139,34 @@ def test_score_external_applies_frozen_thresholds_per_eye(tmp_path: Path) -> Non
     deepdrid = next(r for r in metrics["rows"] if r["source"] == "deepdrid")
     assert deepdrid["images"] == 2  # two eyes from three images
     assert metrics["ungradable"]["messidor2"]["eyes"] == 1
+
+
+def test_load_checkpoint_accepts_runs_trained_before_the_quality_head(tmp_path: Path) -> None:
+    import torch
+
+    from retina_dr.train.external_eval import load_checkpoint
+    from retina_dr.train.model import build_model
+    from tests.test_training import TINY_MODEL
+
+    model = build_model(TINY_MODEL, pretrained=False)
+    state = {k: v for k, v in model.state_dict().items() if not k.startswith("quality_head.")}
+    torch.save({"model": state}, tmp_path / "best.pt")
+    fresh = build_model(TINY_MODEL, pretrained=False)
+    load_checkpoint(fresh, tmp_path / "best.pt", torch.device("cpu"))
+    assert torch.equal(fresh.binary_head.weight, model.binary_head.weight)
+
+
+def test_load_checkpoint_rejects_other_missing_weights(tmp_path: Path) -> None:
+    import torch
+
+    from retina_dr.train.external_eval import load_checkpoint
+    from retina_dr.train.model import build_model
+    from tests.test_training import TINY_MODEL
+
+    model = build_model(TINY_MODEL, pretrained=False)
+    state = {k: v for k, v in model.state_dict().items() if not k.startswith("binary_head.")}
+    torch.save({"model": state}, tmp_path / "best.pt")
+    with pytest.raises(RuntimeError, match="binary_head"):
+        load_checkpoint(
+            build_model(TINY_MODEL, pretrained=False), tmp_path / "best.pt", torch.device("cpu")
+        )

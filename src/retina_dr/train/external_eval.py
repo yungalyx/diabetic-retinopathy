@@ -7,6 +7,7 @@ ensemble's metrics.json. Results are per eye (D-030, D-034).
 
 import json
 from pathlib import Path
+from typing import Final
 
 import numpy as np
 import polars as pl
@@ -17,7 +18,7 @@ from retina_dr.train.backbone import normalization_of
 from retina_dr.train.data import FundusDataset, eval_transform
 from retina_dr.train.engine import TrainConfig, _device, _loader, predict
 from retina_dr.train.metrics import apply_cutpoints
-from retina_dr.train.model import build_model
+from retina_dr.train.model import DrNet, build_model
 from retina_dr.train.report import (
     evaluate_predictions,
     rejected_rows,
@@ -28,13 +29,26 @@ from retina_dr.train.report import (
 FloatArray = np.typing.NDArray[np.float64]
 
 
+_OPTIONAL_KEYS: Final = frozenset({"quality_head.weight", "quality_head.bias"})
+"""Runs trained before D-025 have no quality head. Their quality output is not used."""
+
+
+def load_checkpoint(model: DrNet, path: Path, device: torch.device) -> None:
+    checkpoint = torch.load(path, map_location=device, weights_only=False)
+    result = model.load_state_dict(checkpoint["model"], strict=False)
+    missing = set(result.missing_keys) - _OPTIONAL_KEYS
+    if missing or result.unexpected_keys:
+        raise RuntimeError(
+            f"{path}: missing {sorted(missing)}, unexpected {sorted(result.unexpected_keys)}"
+        )
+
+
 def _run_outputs(
     run_dir: Path, frame: pl.DataFrame, data_dir: Path, device: torch.device, tta: bool
 ) -> tuple[FloatArray, FloatArray, FloatArray]:
     saved = json.loads((run_dir / "config.json").read_text())
     model = build_model(str(saved["model"]), pretrained=False)
-    checkpoint = torch.load(run_dir / "best.pt", map_location=device, weights_only=False)
-    model.load_state_dict(checkpoint["model"])
+    load_checkpoint(model, run_dir / "best.pt", device)
     model = model.to(device)
     norm = normalization_of(model.backbone)
     size = int(saved["image_size"])

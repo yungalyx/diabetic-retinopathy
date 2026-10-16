@@ -115,3 +115,11 @@ Candidate `b3-e10-ens3-q`: the 3 DR seeds plus the separate quality model `quali
 - Of the baseline's 121 DDR grade 4 images called grade 0, the candidate refers 67 and the quality model flags 72.
 - `quality-b3` config.json has the full commit, manifest SHA-256, and licences (D-031 works).
 - Deleted pods `csdzc0mp7r3ejv`, `ae6hziisf38gyo`, `ojsos1hojydwt0`, `6tj7n7p9whuejm` and the CPU readers (approved by Alex).
+
+## 2026-10-16 (afternoon): External test
+
+- Built the external set on the volume: IDRiD 103 images, DeepDRiD 400 images (200 eyes). Manifest SHA-256 4bf899a8b7d15d06...
+- IDRiD reader fix: other IDRiD parts and the training split reuse image names, so the reader indexes the test images only.
+- Wrote `frozen_model.json` (member commits, best.pt hashes, manifest hash, thresholds, cutpoints).
+- Committed the plan hash (`docs/analysis-plan-external.sha256`) before scoring. The scoring pod checked the hash and stored the plan on the volume.
+- First scoring attempt stopped at model load: the DR members were trained before the quality head existed, so their checkpoints have no quality-head weights. No prediction was made. Fix: allow only the missing quality-head weights (`load_checkpoint`). This is a loading fix, not a change to the model or the plan.
