@@ -224,3 +224,21 @@ Each run writes the full git commit, the SHA-256 of the manifest it read, and th
 Pin EyeQ to a fixed commit of its repository and check its SHA-256. Store the labelled manifest on the network volume.
 Rebuild the processed set at a tagged commit before the external test, so the frozen model uses the D-022 crop.
 Reason: D-027 finding 5. The external result must trace to one commit and one data version.
+
+## D-032 Findings-first decision rule (2026-10-16)
+
+Result of the quality run `b3-e10-q` (single seed), with the reject threshold from val (0.980):
+- EyePACS test: quality AUC 0.992, reject recall 0.72.
+- With "reject first" (rule A), DDR yield is 82% and the quality head rejects 31% of referable images against 7% of non-referable images. This fails the yield target and the equal-rejection requirement.
+- Of the baseline's 121 DDR grade 4 images called grade 0, this model rejects 75 and refers 46. None is called "no DR".
+Use "findings first" (rule B): refer when the referral probability is above its threshold, whatever the image quality. Reject only an image that would otherwise be called "not referable".
+Rule B on DDR: yield 92.4%, rejection 8.3% of referable against 7.0% of non-referable, sensitivity 0.916 and specificity 0.945 on decided images. Test: yield 94.1%, rejection 2.0% against 7.0%.
+Reason: a referable finding on a poor image is still a referral. The study sends inadequate images to clinical examination, so "no result" is safe only for images the model would clear.
+Note: DDR showed the problem, but the rule follows from the clinical pathway, not from a DDR score. Thresholds stay from val.
+
+## D-033 Train the quality head as a separate model (2026-10-16)
+
+The quality run lowered DR results on DDR: AUC 0.943 against 0.960-0.969 for the three DR seeds, kappa 0.801, severe undergrades 143.
+Keep the frozen DR ensemble (D-028) unchanged. Train the quality model separately: train rows with an EyeQ label only, quality loss only, checkpoint by val quality AUC.
+The ensemble takes referral and severity from the DR members and the reject probability from the quality model.
+Reason: the shared training (quality loss and reject masking) changed the DR heads. A separate model keeps the DR result that we already measured.
