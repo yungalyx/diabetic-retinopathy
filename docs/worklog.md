@@ -156,3 +156,20 @@ Candidate `b3-e10-ens3-q`: the 3 DR seeds plus the separate quality model `quali
 - Result: RETFound fails the D-038 rule. The frozen model stays primary (D-040).
 - Pods `pzr5n32gyqjf3w` and `j1oo9erb2wvuwa` (RTX 4090) and CPU pod `g3haitafyuxgid` deleted.
 - Cost: about $2.
+
+## 2026-10-21: Local threshold tuning rehearsal (D-041)
+
+1,000 random patient splits per set. Rates on the test half, on eyes that get a result. Median (5th to 95th percentile).
+
+| Set | Threshold | Sensitivity | Specificity | Splits that pass both (0.85 / 0.80) |
+|---|---|---|---|---|
+| DeepDRiD (200 eyes) | Frozen 0.040 | 1.00 (1.00-1.00) | 0.75 (0.65-0.83) | 16% |
+| DeepDRiD (200 eyes) | Local, median 0.233 | 1.00 (0.97-1.00) | 0.84 (0.68-0.95) | 69% |
+| IDRiD (103 eyes) | Frozen 0.040 | 0.96 (0.91-1.00) | 0.41 (0.28-0.55) | 0% |
+| IDRiD (103 eyes) | Local, median 0.316 | 0.86 (0.79-0.94) | 0.85 (0.62-1.00) | 34% |
+
+- Local tuning moves the specificity to the target on average. The local thresholds are 6 to 8 times the frozen threshold.
+- The spread is wide because each tuning half has few non-referable eyes (about 60 in DeepDRiD, about 20 in IDRiD). This supports the plan of about 400 non-referable eyes per camera.
+- On IDRiD, sensitivity falls to 0.86 at specificity 0.85. The ranking (AUC 0.931) leaves little margin for both targets on that camera.
+- DeepDRiD has 256 unused ultra-widefield images with DR grades (Online-Challenge 3 and the training and validation folders).
+- Cost: under $0.05 (CPU pod `xd1516co708cs2`, deleted).
