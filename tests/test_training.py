@@ -487,3 +487,21 @@ def test_parameter_groups_without_layer_decay_keep_one_learning_rate() -> None:
     groups = parameter_groups(model, lr=3e-4, weight_decay=1e-5, layer_decay=None)
     assert {g["lr"] for g in groups} == {3e-4}
     assert {g["weight_decay"] for g in groups} == {1e-5}
+
+
+def test_dr_rows_can_drop_quality_labels() -> None:
+    from retina_dr.train.engine import training_rows
+
+    frame = pl.DataFrame({"grade": [0, 3, 1], "quality": pl.Series([0, 2, None], dtype=pl.Int8)})
+    kept = training_rows(frame, task="dr", quality_labels=True)
+    dropped = training_rows(frame, task="dr", quality_labels=False)
+    assert kept["quality"].null_count() == 1
+    assert dropped["quality"].null_count() == 3
+    assert dropped.height == 3
+
+
+def test_quality_rows_keep_only_labelled_images() -> None:
+    from retina_dr.train.engine import training_rows
+
+    frame = pl.DataFrame({"grade": [0, 3, 1], "quality": pl.Series([0, 2, None], dtype=pl.Int8)})
+    assert training_rows(frame, task="quality", quality_labels=True).height == 2

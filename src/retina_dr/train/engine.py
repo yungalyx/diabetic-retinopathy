@@ -98,6 +98,8 @@ class TrainConfig:
     tta: bool = True
     task: str = "dr"
     """"dr" trains the grading heads. "quality" trains only the quality head (D-033)."""
+    quality_labels: bool = True
+    """False trains a "dr" run without EyeQ labels: no quality loss, no reject masking (D-039)."""
     log_every: int = 200
     device: str = "auto"
 
@@ -229,6 +231,15 @@ def _with_quality_column(frame: pl.DataFrame) -> pl.DataFrame:
     return frame.with_columns(pl.lit(None, dtype=pl.Int8).alias("quality"))
 
 
+def training_rows(frame: pl.DataFrame, task: str, quality_labels: bool) -> pl.DataFrame:
+    """Rows and quality labels that a run trains on (D-033, D-039)."""
+    if task == "quality":
+        return frame.filter(pl.col("quality").is_not_null())
+    if not quality_labels and "quality" in frame.columns:
+        return frame.with_columns(pl.lit(None, dtype=frame.schema["quality"]).alias("quality"))
+    return frame
+
+
 def train(config: TrainConfig) -> Path:
     """Train, keep the best epoch by (val AUC + val QWK) / 2, then evaluate it with TTA."""
     _seed_everything(config.seed)
@@ -238,8 +249,7 @@ def train(config: TrainConfig) -> Path:
         raise ValueError(f"task must be one of {TASKS}, got {config.task!r}")
     quality_only = config.task == "quality"
     splits = load_splits(config)
-    if quality_only:
-        splits[TRAIN_SPLIT] = splits[TRAIN_SPLIT].filter(pl.col("quality").is_not_null())
+    splits[TRAIN_SPLIT] = training_rows(splits[TRAIN_SPLIT], config.task, config.quality_labels)
     log.info("device %s, rows per split %s", device, {k: v.height for k, v in splits.items()})
 
     root = config.data_dir

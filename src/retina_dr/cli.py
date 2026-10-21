@@ -64,6 +64,9 @@ def _parser() -> argparse.ArgumentParser:
     tr.add_argument("--severity-weight", type=float, default=1.0)
     tr.add_argument("--quality-weight", type=float, default=1.0)
     tr.add_argument("--task", choices=("dr", "quality"), default="dr")
+    tr.add_argument(
+        "--no-quality-labels", action="store_true", help="train without EyeQ labels (D-039)"
+    )
     tr.add_argument("--rebalance-start", type=float, default=0.5)
     tr.add_argument("--workers", type=int, default=None, help="default: available CPUs - 1")
     tr.add_argument("--seed", type=int, default=0)
@@ -173,6 +176,7 @@ def _train(args: argparse.Namespace) -> int:
         severity_weight=float(args.severity_weight),
         quality_weight=float(args.quality_weight),
         task=str(args.task),
+        quality_labels=not args.no_quality_labels,
         rebalance_start=float(args.rebalance_start),
         workers=max(1, available_cpus() - 1) if args.workers is None else int(args.workers),
         seed=int(args.seed),

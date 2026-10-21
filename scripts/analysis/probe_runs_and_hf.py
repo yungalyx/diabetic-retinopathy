@@ -32,6 +32,11 @@ def print_runs() -> None:
         name = path.parent.name
         metrics = json.loads(path.read_text())
         print("RUN", name, "best_epoch", metrics.get("best_epoch"), metrics.get("threshold"))
+        config_path = path.parent / "config.json"
+        if config_path.exists():
+            config = json.loads(config_path.read_text())
+            sources = config.get("provenance", {}).get("sources", "no provenance")
+            print("CONFIG", name, config.get("task"), config.get("quality_labels"), sources)
         for row in metrics["rows"]:
             if row["split"] in ("test", "holdout") and row["source"] in ("all", "ddr"):
                 print("ROW", name, {k: row.get(k) for k in KEYS})

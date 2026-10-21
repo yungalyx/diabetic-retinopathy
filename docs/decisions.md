@@ -288,3 +288,8 @@ Rules:
 4. The clinic test is the real test for the model that goes forward.
 Training settings follow the RETFound fine-tuning recipe: layer-wise learning-rate decay 0.65, weight decay 0.05, drop path 0.2, global average pooling, ImageNet normalization.
 Reason: the work is research-only (D-037), so the licence is acceptable. RETFound also has an OCT version, which can serve the second model (D-037). The internal test was not used for model choice (D-016 used DDR), so it is the least biased split left.
+
+## D-039 Train the RETFound DR runs without EyeQ labels (2026-10-21)
+
+The first RETFound run trained with EyeQ quality labels (quality loss and reject masking). The frozen B3 members trained before these labels existed, and D-033 showed that this shared training lowers DR results. Stopped that run after 3 epochs.
+Add `--no-quality-labels` to `retina-dr train`. The RETFound DR runs use it, so both models train under the same conditions. Photo quality comes from the same separate model `quality-b3` in both ensembles.
