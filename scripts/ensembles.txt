@@ -3,3 +3,6 @@
 b3-e10-ens3 b3-e10 b3-e10-s1 b3-e10-s2
 # DR ensemble plus the separate quality model (D-032, D-033).
 b3-e10-ens3-q b3-e10 b3-e10-s1 b3-e10-s2 quality=quality-b3
+# RETFound comparison (D-038).
+retfound-ens3 retfound-e10 retfound-e10-s1 retfound-e10-s2
+retfound-ens3-q retfound-e10 retfound-e10-s1 retfound-e10-s2 quality=quality-b3

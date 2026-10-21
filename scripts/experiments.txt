@@ -11,3 +11,7 @@ b3-e10-s2 --model efficientnet_b3 --epochs 10 --seed 2
 b3-e10-q --model efficientnet_b3 --epochs 10
 # Separate quality model on EyeQ-labelled rows only (D-033).
 quality-b3 --model efficientnet_b3 --epochs 10 --task quality
+# RETFound comparison (D-038): ViT-Large MAE weights, RETFound fine-tuning recipe, 3 seeds.
+retfound-e10 --model retfound_mae --image-size 224 --epochs 10 --batch-size 32 --lr 5e-4 --weight-decay 0.05 --layer-decay 0.65
+retfound-e10-s1 --model retfound_mae --image-size 224 --epochs 10 --batch-size 32 --lr 5e-4 --weight-decay 0.05 --layer-decay 0.65 --seed 1
+retfound-e10-s2 --model retfound_mae --image-size 224 --epochs 10 --batch-size 32 --lr 5e-4 --weight-decay 0.05 --layer-decay 0.65 --seed 2

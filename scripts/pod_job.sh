@@ -12,6 +12,7 @@ STAMP="$(date -u +%Y%m%d-%H%M)"
 export UV_PROJECT_ENVIRONMENT="${UV_PROJECT_ENVIRONMENT:-/root/venv}"
 export UV_CACHE_DIR="${UV_CACHE_DIR:-/workspace/.uv-cache}"
 export UV_LINK_MODE=copy
+export HF_HUB_CACHE="${HF_HUB_CACHE:-/workspace/.hf-cache}"
 
 log() { echo "[job $(date -u +%H:%M:%S)] $*"; }
 

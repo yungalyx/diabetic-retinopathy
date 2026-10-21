@@ -32,6 +32,7 @@ from retina_dr.train.metrics import (
     tune_cutpoints,
 )
 from retina_dr.train.model import DrNet, build_model
+from retina_dr.train.optim import parameter_groups
 from retina_dr.train.report import (
     evaluate_predictions,
     operating_threshold,
@@ -85,6 +86,8 @@ class TrainConfig:
     batch_size: int = 24
     lr: float = 3e-4
     weight_decay: float = 1e-5
+    layer_decay: float | None = None
+    """Layer-wise learning-rate decay for ViT backbones (D-038). None keeps one learning rate."""
     severity_weight: float = 1.0
     quality_weight: float = 1.0
     rebalance_start: float = 0.5
@@ -272,8 +275,9 @@ def train(config: TrainConfig) -> Path:
     if device.type == "cuda":
         torch.backends.cudnn.benchmark = True
         model = model.to(memory_format=torch.channels_last)
+    groups = parameter_groups(model, config.lr, config.weight_decay, config.layer_decay)
     optimizer = torch.optim.AdamW(
-        model.parameters(), lr=config.lr, weight_decay=config.weight_decay
+        [{"params": g["params"], "lr": g["lr"], "weight_decay": g["weight_decay"]} for g in groups]
     )
     total_steps = config.epochs * len(train_loader)
     scheduler = torch.optim.lr_scheduler.LambdaLR(
@@ -338,7 +342,7 @@ def train(config: TrainConfig) -> Path:
             "epoch": epoch,
             "train_rows": splits[TRAIN_SPLIT].height,
             "alpha": round(alpha, 4),
-            "lr": scheduler.get_last_lr()[0],
+            "lr": max(scheduler.get_last_lr()),
             "train_loss": sums[0] / max(steps, 1),
             "train_bce": sums[1] / max(steps, 1),
             "train_huber": sums[2] / max(steps, 1),

@@ -422,3 +422,68 @@ def test_eye_level_treats_each_image_as_one_eye_without_an_eye_id() -> None:
         }
     )
     assert to_eye_level(frame).height == 2
+
+
+def test_retfound_state_loads_mae_encoder_weights() -> None:
+    import timm
+
+    from retina_dr.train.backbone import load_retfound_state, retfound_vit
+
+    model = retfound_vit("vit_tiny_patch16_224", drop_path=0.0)
+    source = timm.create_model("vit_tiny_patch16_224", pretrained=False, num_classes=0)
+    state = dict(source.state_dict())
+    state["mask_token"] = torch.zeros(1, 1, 192)
+    state["decoder_embed.weight"] = torch.zeros(4, 192)
+    state["head.weight"] = torch.zeros(5, 192)
+    load_retfound_state(model, state)
+    assert torch.equal(model.state_dict()["fc_norm.weight"], state["norm.weight"])
+    qkv = "blocks.0.attn.qkv.weight"
+    assert torch.equal(model.state_dict()[qkv], state[qkv])
+
+
+def test_retfound_state_rejects_a_foreign_checkpoint() -> None:
+    from retina_dr.train.backbone import load_retfound_state, retfound_vit
+
+    model = retfound_vit("vit_tiny_patch16_224", drop_path=0.0)
+    with pytest.raises(ValueError, match="missing"):
+        load_retfound_state(model, {"conv1.weight": torch.zeros(1)})
+
+
+def test_retfound_vit_uses_imagenet_normalization_and_records_the_licence() -> None:
+    from retina_dr.train.backbone import licence_of, normalization_of, retfound_vit
+    from retina_dr.train.data import IMAGENET_MEAN
+
+    model = retfound_vit("vit_tiny_patch16_224", drop_path=0.0)
+    assert normalization_of(model)[0] == IMAGENET_MEAN
+    assert licence_of(model) == "cc-by-nc-4.0"
+
+
+def test_layer_decay_scales_learning_rate_by_depth() -> None:
+    from retina_dr.train.backbone import retfound_vit
+    from retina_dr.train.model import DrNet
+    from retina_dr.train.optim import parameter_groups
+
+    backbone = retfound_vit("vit_tiny_patch16_224", drop_path=0.0)
+    model = DrNet(backbone, 192)
+    groups = parameter_groups(model, lr=1.0, weight_decay=0.05, layer_decay=0.5)
+    by_name = {name: g for g in groups for name in g["names"]}
+    blocks = backbone.blocks
+    assert isinstance(blocks, torch.nn.Sequential)
+    depth = len(blocks)
+    assert by_name["binary_head.weight"]["lr"] == 1.0
+    assert by_name["backbone.blocks.0.mlp.fc1.weight"]["lr"] == 0.5**depth
+    assert by_name["backbone.patch_embed.proj.weight"]["lr"] == 0.5 ** (depth + 1)
+    assert by_name["backbone.blocks.0.mlp.fc1.weight"]["weight_decay"] == 0.05
+    assert by_name["backbone.blocks.0.mlp.fc1.bias"]["weight_decay"] == 0.0
+    assert by_name["backbone.pos_embed"]["weight_decay"] == 0.0
+    count = sum(len(g["params"]) for g in groups)
+    assert count == len([p for p in model.parameters() if p.requires_grad])
+
+
+def test_parameter_groups_without_layer_decay_keep_one_learning_rate() -> None:
+    from retina_dr.train.optim import parameter_groups
+
+    model = build_model(TINY_MODEL, pretrained=False)
+    groups = parameter_groups(model, lr=3e-4, weight_decay=1e-5, layer_decay=None)
+    assert {g["lr"] for g in groups} == {3e-4}
+    assert {g["weight_decay"] for g in groups} == {1e-5}

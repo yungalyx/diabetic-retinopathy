@@ -60,6 +60,7 @@ def _parser() -> argparse.ArgumentParser:
     tr.add_argument("--batch-size", type=int, default=24)
     tr.add_argument("--lr", type=float, default=3e-4)
     tr.add_argument("--weight-decay", type=float, default=1e-5)
+    tr.add_argument("--layer-decay", type=float, default=None, help="ViT layer-wise lr decay")
     tr.add_argument("--severity-weight", type=float, default=1.0)
     tr.add_argument("--quality-weight", type=float, default=1.0)
     tr.add_argument("--task", choices=("dr", "quality"), default="dr")
@@ -168,6 +169,7 @@ def _train(args: argparse.Namespace) -> int:
         batch_size=int(args.batch_size),
         lr=float(args.lr),
         weight_decay=float(args.weight_decay),
+        layer_decay=None if args.layer_decay is None else float(args.layer_decay),
         severity_weight=float(args.severity_weight),
         quality_weight=float(args.quality_weight),
         task=str(args.task),
