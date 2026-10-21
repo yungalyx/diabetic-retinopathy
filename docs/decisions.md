@@ -308,3 +308,14 @@ The three RETFound seeds gave test AUC 0.905, 0.902, and 0.902. The ensemble did
 Probable cause: RETFound runs at 224 px, the B3 model at 512 px. Small lesions are lost at 224 px. A RETFound run at 448 px or more is not done. It needs a new decision.
 The frozen metrics file has no `qwk_system` (it predates D-034). The comparison uses `qwk_tuned` for both models.
 Messidor-2 scores the frozen model only. RETFound is not a candidate, so D-038 rule 3 does not apply.
+
+## D-041 Rehearse local threshold tuning on the spent external sets (2026-10-21)
+
+Method, fixed before the run:
+1. Use the saved per-image outputs of the frozen model on DeepDRiD and IDRiD (`runs/external/b3-e10-ens3-q/predictions.parquet`). No new scoring.
+2. Per set, split the eyes by patient into two halves, 1,000 times at random (seed 0). IDRiD has no patient link, so each eye is its own patient.
+3. On the tuning half, set the referral threshold so that 85% of non-referable eyes are below it (the val rule, D-021). Keep the frozen reject threshold.
+4. On the test half, measure sensitivity and specificity on eyes that get a result, with the local threshold and with the frozen threshold.
+5. Report the median and the 5th to 95th percentile over the splits, and the share of splits where the test half passes both sensitivity 0.85 and specificity 0.80 (point values).
+This is a demonstration of the procedure only. The sets are spent (D-036), the halves are small (about 100 eyes in DeepDRiD, about 50 in IDRiD), and no threshold from this rehearsal goes forward.
+The researcher reports that the clinic cameras are "OPTS", probably Optos ultra-widefield cameras. The model trained on standard 45-degree fundus photographs. Confirm the camera before the clinic plan. DeepDRiD has 256 unused ultra-widefield images with DR grades that can test this.

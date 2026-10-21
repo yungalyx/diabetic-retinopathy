@@ -97,6 +97,13 @@ def _parser() -> argparse.ArgumentParser:
     sx.add_argument("--out-dir", type=Path, required=True)
     sx.add_argument("--resamples", type=int, default=500)
 
+    rt = commands.add_parser("rehearse-tuning", help="rehearse local threshold tuning (D-041)")
+    rt.add_argument("--predictions", type=Path, required=True, help="score-external output")
+    rt.add_argument("--frozen-metrics", type=Path, required=True, help="frozen metrics.json")
+    rt.add_argument("--out-dir", type=Path, required=True)
+    rt.add_argument("--splits", type=int, default=1000)
+    rt.add_argument("--seed", type=int, default=0)
+
     ev = commands.add_parser("evaluate", help="recompute metrics of a finished run (D-017)")
     ev.add_argument("--run-dir", type=Path, required=True)
     ev.add_argument("--data-dir", type=Path, default=Path("data/processed"))
@@ -145,6 +152,32 @@ def _score_external(args: argparse.Namespace) -> int:
         n_resamples=int(args.resamples),
     )
     print(json.dumps(result, indent=2))
+    return 0
+
+
+def _rehearse_tuning(args: argparse.Namespace) -> int:
+    from retina_dr.train.local_tuning import rehearse, summarize_rehearsal
+    from retina_dr.train.report import to_eye_level
+
+    frozen = json.loads(Path(args.frozen_metrics).read_text())
+    eyes = to_eye_level(pl.read_parquet(args.predictions)).filter(
+        pl.col("binary_label").is_not_null()
+    )
+    out = Path(args.out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    report: dict[str, dict[str, float]] = {}
+    for source in sorted(eyes["source"].unique().to_list()):
+        rows = rehearse(
+            eyes.filter(pl.col("source") == source),
+            int(args.splits),
+            float(frozen["threshold"]),
+            float(frozen["quality_threshold"]),
+            seed=int(args.seed),
+        )
+        rows.write_parquet(out / f"{source}.parquet")
+        report[source] = summarize_rehearsal(rows, min_sens=0.85, min_spec=0.80)
+    (out / "summary.json").write_text(json.dumps(report, indent=2))
+    print(json.dumps(report, indent=2))
     return 0
 
 
@@ -204,6 +237,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _ensemble(args)
     if args.command == "evaluate":
         return _evaluate(args)
+    if args.command == "rehearse-tuning":
+        return _rehearse_tuning(args)
     sources = parse_sources(str(args.sources))
 
     if args.command == "download":
