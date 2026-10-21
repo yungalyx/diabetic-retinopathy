@@ -137,3 +137,22 @@ Candidate `b3-e10-ens3-q`: the 3 DR seeds plus the separate quality model `quali
 - Deviation from the plan: the scoring code reports a 95% interval for the severity-head kappa, not for the system kappa. The system kappa has a point value only.
 - Label check: DeepDRiD 82 referable eyes = 164 referable images / 2. IDRiD 64 referable = 32 + 19 + 13 images of grade 2-4. Both agree with the build counts.
 - Cost: about $0.40 (GPU and CPU pods). All pods deleted.
+
+## 2026-10-21: RETFound comparison (D-037 to D-040)
+
+- Recorded the researcher call answers (D-037) and the RETFound comparison rule (D-038).
+- Added the RETFound backbone (`retfound_mae`, ViT-Large MAE weights from HuggingFace) and layer-wise learning-rate decay. 146 tests pass.
+- First run trained with EyeQ labels. Stopped after 3 epochs and added `--no-quality-labels` so RETFound trains like the frozen B3 members (D-039). 148 tests pass.
+- RETFound speed on an RTX 4090 at 224 px: about 225 images/s, 2.8 minutes per epoch.
+
+| Run (internal test) | AUC (95% interval) | Sensitivity / specificity | Kappa (tuned) | Best epoch |
+|---|---|---|---|---|
+| retfound-e10 | 0.905 (0.892-0.917) | 0.791 / 0.871 | 0.767 | 7 |
+| retfound-e10-s1 | 0.902 (0.888-0.914) | 0.783 / 0.869 | 0.763 | 7 |
+| retfound-e10-s2 | 0.902 (0.888-0.914) | 0.783 / 0.874 | 0.769 | 9 |
+| retfound-ens3-q | 0.906 (0.892-0.917) | 0.790 / 0.872 | 0.769 | - |
+| b3-e10-ens3-q (frozen) | 0.962 (0.954-0.969) | 0.917 / 0.862 | 0.853 | - |
+
+- Result: RETFound fails the D-038 rule. The frozen model stays primary (D-040).
+- Pods `pzr5n32gyqjf3w` and `j1oo9erb2wvuwa` (RTX 4090) and CPU pod `g3haitafyuxgid` deleted.
+- Cost: about $2.

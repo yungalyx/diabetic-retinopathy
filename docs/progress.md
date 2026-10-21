@@ -1,6 +1,6 @@
 # Progress
 
-Last update: 2026-10-15
+Last update: 2026-10-21
 
 ## Status
 
@@ -15,15 +15,16 @@ Last update: 2026-10-15
 | 6b. Baseline training run | Done 2026-10-15 16:31 UTC, run `b3-20261015-1520-603e880`, best epoch 9 |
 | 7. Model comparison | Done. Frozen configuration: B3, 10 epochs, 3-seed ensemble (D-024, D-026, D-028). RETFound stopped |
 | 8. Quality head, per-eye results, external test | Done 2026-10-16 except Messidor-2 (waits for ADCIS access). External result in D-036 |
+| 9. RETFound comparison | Done 2026-10-21. RETFound at 224 px: test AUC 0.906 against 0.962. Frozen model stays primary (D-038 to D-040) |
 
 ## RunPod resources
 
 | Resource | ID | Details | Cost |
 |---|---|---|---|
-| Pod `retina-dr-4090` | `00difbrelhsfon` | Build pod. RTX 4090, EU-RO-1, 250 GB container disk. STOPPED. Its host GPU was taken, so it could not restart | $5.52 billed |
-| Pod `retina-dr-train-4090` | `rqcktnogjy5zqf` | Training pod. RTX 4090, EU-RO-1, 60 GB container disk. STOPPED by the job after the run | $0.89/hr while running. $1.22 billed at last read (billing lags) |
+| Pods | none | All pods are deleted (2026-10-21) | $0 |
 | Network volume `retina-dr-data` | `5ac8gl5sy9` | 50 GB STANDARD, EU-RO-1, mounted at `/workspace` | About $3.50/month until deleted |
 | Secret `kaggle_api_token` | `s7u36506fd` | Pod reads it as `KAGGLE_API_TOKEN` | Free |
+| Secret `hf_token` | `jlzualo1qn` | Pod reads it as `HF_TOKEN` (RETFound weights) | Free |
 
 The pod log is also written to `/workspace/bootstrap.log`.
 

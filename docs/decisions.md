@@ -293,3 +293,18 @@ Reason: the work is research-only (D-037), so the licence is acceptable. RETFoun
 
 The first RETFound run trained with EyeQ quality labels (quality loss and reject masking). The frozen B3 members trained before these labels existed, and D-033 showed that this shared training lowers DR results. Stopped that run after 3 epochs.
 Add `--no-quality-labels` to `retina-dr train`. The RETFound DR runs use it, so both models train under the same conditions. Photo quality comes from the same separate model `quality-b3` in both ensembles.
+
+## D-040 RETFound result: the frozen model stays primary (2026-10-21)
+
+Internal test split (4,568 images), D-038 rule:
+
+| Model | AUC (95% interval) | Sensitivity / specificity at the val threshold | Kappa (tuned cutpoints) |
+|---|---|---|---|
+| Frozen B3 ensemble `b3-e10-ens3-q` | 0.962 (0.954-0.969) | 0.917 / 0.862 | 0.853 |
+| RETFound 3-seed ensemble `retfound-ens3-q` | 0.906 (0.892-0.917) | 0.790 / 0.872 | 0.769 |
+
+RETFound fails both conditions (AUC 0.972 or more; kappa not lower). The intervals do not overlap. The frozen model `b3-e10-ens3-q` stays primary for Messidor-2 and the clinic phase.
+The three RETFound seeds gave test AUC 0.905, 0.902, and 0.902. The ensemble did not improve on them, because the seeds start from the same pretrained weights.
+Probable cause: RETFound runs at 224 px, the B3 model at 512 px. Small lesions are lost at 224 px. A RETFound run at 448 px or more is not done. It needs a new decision.
+The frozen metrics file has no `qwk_system` (it predates D-034). The comparison uses `qwk_tuned` for both models.
+Messidor-2 scores the frozen model only. RETFound is not a candidate, so D-038 rule 3 does not apply.
