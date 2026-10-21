@@ -270,3 +270,21 @@ Decisions:
 2. The clinic phase must set the referral and reject thresholds on clinic tuning data before its frozen test. This result is the evidence for that step.
 3. Messidor-2 runs later with the same plan and the same frozen model, when ADCIS access exists.
 4. Add a 95% interval for the system kappa to the scoring code before the next external or clinic test.
+
+## D-037 Answers from the researcher call (2026-10-20)
+
+1. Licence: the work is research-only for now. Non-commercial data and weights (DDR, EyeQ, RETFound) are acceptable (D-020 stays).
+2. Clinic data: the researcher must submit an ethics request form before clinic images arrive. Gate 0 waits for that approval.
+3. Diabetic macular edema (DME) and other diabetes-related findings that need OCT: this project owns them, possibly as a second model.
+Still open: per-camera threshold tuning (D-036, decision 2) and the two proposed pass criteria (equal rejection at most 1.5 times, severe undergrading).
+
+## D-038 RETFound comparison under the frozen model (2026-10-21)
+
+Reopen D-028 for one comparison only: RETFound (`YukunZhou/RETFound_mae_natureCFP`, ViT-Large, 224 px, CC BY-NC 4.0) against the frozen model `b3-e10-ens3-q`.
+Rules:
+1. Train 3 seeds with the same data, splits, losses, and sampler. Choose all settings on val only. Do not use DDR, IDRiD, or DeepDRiD for any choice (D-028, D-036).
+2. The frozen model stays the primary model. RETFound replaces it only if its 3-seed ensemble meets both conditions on the internal test split: DR AUC at least 0.972 (frozen model 0.962, plus 0.010), and system kappa not lower than the frozen model on the same split.
+3. Write the primary model into the Messidor-2 plan before scoring. Score both models once on Messidor-2 and report both.
+4. The clinic test is the real test for the model that goes forward.
+Training settings follow the RETFound fine-tuning recipe: layer-wise learning-rate decay 0.65, weight decay 0.05, drop path 0.2, global average pooling, ImageNet normalization.
+Reason: the work is research-only (D-037), so the licence is acceptable. RETFound also has an OCT version, which can serve the second model (D-037). The internal test was not used for model choice (D-016 used DDR), so it is the least biased split left.
