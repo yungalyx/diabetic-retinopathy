@@ -18,7 +18,9 @@ from retina_dr.sources import index_images, read_csv_checked
 
 log = logging.getLogger(__name__)
 
-EXTERNAL_SOURCES: Final = ("idrid", "deepdrid", "messidor2")
+EXTERNAL_SOURCES: Final = ("idrid", "deepdrid", "messidor2", "deepdrid_uwf")
+UNGRADABLE_UWF: Final = 5
+"""DeepDRiD ultra-widefield grade 5: image quality too low to grade."""
 EXTERNAL_SPLIT: Final = "external"
 
 
@@ -91,6 +93,48 @@ def read_deepdrid(root: Path) -> list[ExternalRecord]:
     return records
 
 
+def read_deepdrid_uwf(root: Path) -> list[ExternalRecord]:
+    """DeepDRiD ultra-widefield images (D-042): training, validation, and Challenge 3 evaluation.
+
+    One image per eye (<patient>_<l|r><n>). Grade 5 is ungradable: grade None, quality REJECT.
+    """
+    base = next(root.rglob("ultra-widefield_images"), root)
+    frames = [
+        pl.read_csv(path, infer_schema_length=0).select(
+            pl.col("image_id"), pl.col("DR_level").cast(pl.Int64).alias("grade")
+        )
+        for path in sorted(base.rglob("ultra-widefield-*.csv"))
+    ]
+    frames.extend(
+        pl.read_excel(path).select(
+            pl.col("image_id").cast(pl.Utf8),
+            pl.col("UWF_DR_Levels").cast(pl.Int64).alias("grade"),
+        )
+        for path in sorted(base.rglob("Challenge3_labels.xlsx"))
+    )
+    if not frames:
+        raise FileNotFoundError(f"no ultra-widefield label files under {root}")
+    index = index_images(base)
+    records: list[ExternalRecord] = []
+    for image_id, grade in pl.concat(frames).iter_rows():
+        if image_id not in index:
+            continue
+        patient, eye = image_id.split("_", 1)
+        gradable = grade is not None and grade != UNGRADABLE_UWF
+        records.append(
+            ExternalRecord(
+                "deepdrid_uwf",
+                image_id,
+                index[image_id],
+                f"{patient}_{eye[0]}",
+                patient,
+                int(grade) if gradable else None,
+                None if gradable else REJECT,
+            )
+        )
+    return records
+
+
 def read_messidor2(root: Path) -> list[ExternalRecord]:
     """Messidor-2 images (ADCIS) with the Google Brain adjudicated grades (messidor_data.csv).
 
@@ -123,7 +167,12 @@ def read_messidor2(root: Path) -> list[ExternalRecord]:
     return records
 
 
-_READERS: Final = {"idrid": read_idrid, "deepdrid": read_deepdrid, "messidor2": read_messidor2}
+_READERS: Final = {
+    "idrid": read_idrid,
+    "deepdrid": read_deepdrid,
+    "messidor2": read_messidor2,
+    "deepdrid_uwf": read_deepdrid_uwf,
+}
 
 
 def build_external(raw_dir: Path, out_dir: Path, size: int) -> pl.DataFrame:

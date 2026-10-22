@@ -319,3 +319,14 @@ Method, fixed before the run:
 5. Report the median and the 5th to 95th percentile over the splits, and the share of splits where the test half passes both sensitivity 0.85 and specificity 0.80 (point values).
 This is a demonstration of the procedure only. The sets are spent (D-036), the halves are small (about 100 eyes in DeepDRiD, about 50 in IDRiD), and no threshold from this rehearsal goes forward.
 The researcher reports that the clinic cameras are "OPTS", probably Optos ultra-widefield cameras. The model trained on standard 45-degree fundus photographs. Confirm the camera before the clinic plan. DeepDRiD has 256 unused ultra-widefield images with DR grades that can test this.
+
+## D-042 Score the frozen model on ultra-widefield images (2026-10-22)
+
+The clinic cameras are probably Optos ultra-widefield (D-041). The model trained only on standard 45-degree fundus photographs. Method, fixed before scoring:
+1. Set: all DeepDRiD ultra-widefield images (training, validation, and Challenge 3 evaluation folders): 256 images, 128 patients, one image per eye, CC BY-SA 4.0. No project step used them before. Grade 5 is ungradable.
+2. Model and processing: the frozen model `b3-e10-ens3-q` with the frozen thresholds and the unchanged preprocessing. No change for this image type.
+3. Score once with `retina-dr score-external`. Report AUC, sensitivity and specificity at the frozen threshold, yield, and the tuning rehearsal (D-041 method).
+4. Decision rule for the clinic plan, written before scoring:
+   - AUC 0.90 or more: threshold tuning on clinic data is probably enough.
+   - AUC below 0.90: plan to fine-tune on ultra-widefield images (clinic data, or public ultra-widefield sets) before the clinic test.
+This result does not change the frozen model. It is evidence for the clinic plan only.

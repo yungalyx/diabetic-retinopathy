@@ -3,7 +3,13 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from retina_dr.external import build_external, read_deepdrid, read_idrid, read_messidor2
+from retina_dr.external import (
+    build_external,
+    read_deepdrid,
+    read_deepdrid_uwf,
+    read_idrid,
+    read_messidor2,
+)
 from retina_dr.quality import GOOD, REJECT
 from tests.conftest import write_fundus
 
@@ -42,6 +48,27 @@ def _deepdrid(root: Path) -> Path:
     return root
 
 
+def _deepdrid_uwf(root: Path) -> Path:
+    base = root / "ultra-widefield_images"
+    header = "patient_id,image_id,image_path,DR_level,position\n"
+    for split, rows in (
+        ("ultra-widefield-training", ["1,1_r1,x,0,right_eye", "1,1_l2,x,5,left_eye"]),
+        ("ultra-widefield-validation", ["34,34_l2,x,3,left_eye"]),
+    ):
+        folder = base / split
+        folder.mkdir(parents=True)
+        (folder / f"{split}.csv").write_text(header + "\n".join(rows) + "\n")
+        for row in rows:
+            patient, image_id = row.split(",")[:2]
+            write_fundus(folder / "Images" / patient / f"{image_id}.jpg", seed=len(image_id))
+    evaluation = base / "Online-Challenge3-Evaluation"
+    write_fundus(evaluation / "Images" / "58" / "58_l2.jpg", seed=3)
+    pl.DataFrame({"image_id": ["58_l2"], "UWF_DR_Levels": [2]}).write_excel(
+        evaluation / "Challenge3_labels.xlsx"
+    )
+    return root
+
+
 def _messidor2(root: Path) -> Path:
     for i, name in enumerate(["a.png", "b.png"]):
         write_fundus(root / "IMAGES" / name, seed=i)
@@ -64,6 +91,18 @@ def test_read_deepdrid_links_images_to_eyes_and_quality(tmp_path: Path) -> None:
     assert records["347_l1"].quality == GOOD
     assert records["347_l2"].quality == REJECT
     assert records["347_r1"].grade == 4
+
+
+def test_read_deepdrid_uwf_reads_all_three_splits_and_marks_grade_5(tmp_path: Path) -> None:
+    records = {r.image_id: r for r in read_deepdrid_uwf(_deepdrid_uwf(tmp_path / "uwf"))}
+    assert set(records) == {"1_r1", "1_l2", "34_l2", "58_l2"}
+    assert records["1_l2"].grade is None
+    assert records["1_l2"].quality == REJECT
+    assert records["34_l2"].grade == 3
+    assert records["58_l2"].grade == 2
+    assert records["58_l2"].patient_id == "58"
+    assert records["1_r1"].eye_id == "1_r"
+    assert records["1_r1"].source == "deepdrid_uwf"
 
 
 def test_read_messidor2_marks_ungradable_images(tmp_path: Path) -> None:
