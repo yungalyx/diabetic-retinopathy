@@ -173,3 +173,21 @@ Candidate `b3-e10-ens3-q`: the 3 DR seeds plus the separate quality model `quali
 - On IDRiD, sensitivity falls to 0.86 at specificity 0.85. The ranking (AUC 0.931) leaves little margin for both targets on that camera.
 - DeepDRiD has 256 unused ultra-widefield images with DR grades (Online-Challenge 3 and the training and validation folders).
 - Cost: under $0.05 (CPU pod `xd1516co708cs2`, deleted).
+
+## 2026-10-22: Frozen model on ultra-widefield images (D-042, D-043)
+
+- Added the DeepDRiD ultra-widefield reader and `scripts/external_uwf_job.sh`. 154 tests pass.
+- Set: 256 images, 128 patients, one image per eye. 247 graded eyes in the result, 101 referable, 6 ungradable.
+
+| Measure (per eye) | Result |
+|---|---|
+| AUC (95% interval) | 0.818 (0.748-0.886) |
+| Sensitivity / specificity at the frozen threshold | 0.960 / 0.192 |
+| Sensitivity at 90% specificity | 0.555 |
+| Kappa, tuned cutpoints | 0.357 |
+| Yield | 87% |
+| No result: referable / non-referable | 4% / 19% |
+| Rehearsal, local threshold: median specificity | 0.08 |
+
+- Result: AUC below 0.90. The D-042 rule says fine-tune for ultra-widefield images (D-043).
+- Pods `eqs26qmtkeaa4b` (RTX 4090) and `7oub95s18n9a0p` (CPU) deleted. Cost: about $0.25.

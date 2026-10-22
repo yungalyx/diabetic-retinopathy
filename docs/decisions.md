@@ -330,3 +330,16 @@ The clinic cameras are probably Optos ultra-widefield (D-041). The model trained
    - AUC 0.90 or more: threshold tuning on clinic data is probably enough.
    - AUC below 0.90: plan to fine-tune on ultra-widefield images (clinic data, or public ultra-widefield sets) before the clinic test.
 This result does not change the frozen model. It is evidence for the clinic plan only.
+
+## D-043 Ultra-widefield result: fine-tuning is needed for Optos images (2026-10-22)
+
+The frozen model on 247 graded DeepDRiD ultra-widefield eyes (101 referable), scored once (D-042):
+- AUC 0.818 (0.748-0.886). This is below 0.90, so the D-042 rule applies: plan to fine-tune on ultra-widefield images before a clinic test with Optos cameras.
+- At the frozen threshold, sensitivity 0.960 and specificity 0.192. Every non-referable eye that got a result was referred.
+- Kappa (tuned cutpoints) 0.357. Yield 87%. The quality model gave "no result" to 19% of non-referable eyes and 4% of referable eyes.
+- Sensitivity at 90% specificity: 0.555.
+- Threshold tuning rehearsal (D-041 method): median specificity 0.08 on eyes with a result. The quality model rejects most non-referable eyes below the local threshold, so a referral threshold alone cannot fix this. A ranking this weak cannot meet both targets with any threshold.
+Consequences:
+1. The current model is for standard fundus photographs only. Do not use it on ultra-widefield images.
+2. Confirm the clinic camera. If it is Optos, the clinic plan needs ultra-widefield training data, a fine-tuned model, and a new frozen test.
+3. These 256 images are now used. They cannot serve as an independent test for a model fine-tuned later.
